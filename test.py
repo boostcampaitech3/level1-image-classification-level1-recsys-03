@@ -6,7 +6,7 @@ import model.loss as module_loss
 import model.metric as module_metric
 import model.model as module_arch
 from parse_config import ConfigParser
-
+####################### baseline code #######################
 
 def main(config):
     logger = config.get_logger('test')

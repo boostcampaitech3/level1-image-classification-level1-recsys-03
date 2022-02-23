@@ -1,6 +1,6 @@
 from torchvision import datasets, transforms
 from base import BaseDataLoader
-
+####################### baseline code #######################
 
 class MnistDataLoader(BaseDataLoader):
     """
