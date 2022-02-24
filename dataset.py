@@ -124,7 +124,7 @@ class MaskBaseDataset(Dataset):
     age_labels = []
     multi_labels = []
 
-    def __init__(self, data_dir, label='multi', mean=None, std=None, val_ratio=0.2):
+    def __init__(self, data_dir, label='multi', mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         self.data_dir = data_dir
         self.mean = mean
         self.std = std
@@ -133,19 +133,14 @@ class MaskBaseDataset(Dataset):
         
         if self.label == 'multi':
             self.num_classes = 3 * 2 * 3
-            self.get_label = self.get_multi_label()
         elif self.label == 'mask':
             self.num_classes = 3
-            self.get_label = self.get_mask_label()
         elif self.label == 'gender':
             self.num_classes = 2
-            self.get_label = self.get_gender_label()
         elif self.label == 'age':
             self.num_classes = 3
-            self.get_label = self.get_age_label()
         else:
             raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
-
 
         self.transform = None
         self.setup()
@@ -203,6 +198,18 @@ class MaskBaseDataset(Dataset):
 
     def __len__(self):
         return len(self.image_paths)
+    
+    def get_label(self, idx):
+        if self.label == 'multi':
+            return self.get_multi_label(idx)
+        elif self.label == 'mask':
+            return self.get_mask_label(idx)
+        elif self.label == 'gender':
+            return self.get_gender_label(idx)
+        elif self.label == 'age':
+            return self.get_age_label(idx)
+        else:
+            raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
 
     def get_mask_label(self, index) -> MaskLabels:
         return self.mask_labels[index]
@@ -239,6 +246,11 @@ class MaskBaseDataset(Dataset):
         img_cp *= 255.0
         img_cp = np.clip(img_cp, 0, 255).astype(np.uint8)
         return img_cp
+
+    # def WeightedRandomSampler(self) -> WeightedRandomSampler:
+    #     """
+    #     """
+    #     return None
 
     def split_dataset(self) -> Tuple[Subset, Subset]:
         """
