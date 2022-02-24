@@ -124,7 +124,8 @@ class MaskBaseDataset(Dataset):
     gender_labels = []
     age_labels = []
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    # def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=None, std=None, val_ratio=0.2):
         self.data_dir = data_dir
         self.mean = mean
         self.std = std
@@ -171,6 +172,7 @@ class MaskBaseDataset(Dataset):
 
             self.mean = np.mean(sums, axis=0) / 255
             self.std = (np.mean(squared, axis=0) - self.mean ** 2) ** 0.5 / 255
+            print(self.mean, self.std)
 
     def set_transform(self, transform):
         self.transform = transform
@@ -243,8 +245,10 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         구현은 val_ratio 에 맞게 train / val 나누는 것을 이미지 전체가 아닌 사람(profile)에 대해서 진행하여 indexing 을 합니다
         이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
-
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    # [0.5573112  0.52429302 0.50174594] [0.61373778 0.58633636 0.56743769]
+    # def __init__(self, data_dir, mean=mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.5573112, 0.52429302, 0.50174594), std=(0.61373778, 0.58633636, 0.56743769), val_ratio=0.2):
+    # def __init__(self, data_dir, mean=None, std=None, val_ratio=0.2):
         self.indices = defaultdict(list)
         super().__init__(data_dir, mean, std, val_ratio)
 
