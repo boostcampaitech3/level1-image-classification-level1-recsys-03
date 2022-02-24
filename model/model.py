@@ -1,8 +1,10 @@
 ##################################### baseline code #####################################
 
+from typing import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
 
 
 class BaseModel(nn.Module):
@@ -35,6 +37,69 @@ class BaseModel(nn.Module):
         x = x.view(-1, 128)
         return self.fc(x)
 
+###########################################################################################
+# pretrained VGGFace (base VGG16)
+# https://www.robots.ox.ac.uk/~albanie/models/pytorch-mcn/vgg_face_dag.pth
+###########################################################################################
+class VGGFace(nn.Module):
+    def __init__(self, num_classes, dict_weight: OrderedDict=None):
+        super().__init__()
+        self.model = models.vgg16()
+        self.num_classes = num_classes
+        self.dict_weight = dict_weight
+        
+        self.init_weights()
+        # for param in self.model.parameters():
+        #     param.requires_grad = False
+
+    def forward(self, x):
+        return self.model(x)
+    
+    def print(self):
+        import numpy as np
+        
+        np.set_printoptions(precision=3)
+        n_param = 0
+        for p_idx,(param_name,param) in enumerate(self.model.named_parameters()):
+            if param.requires_grad:
+                param_numpy = param.detach().cpu().numpy() # to numpy array 
+                n_param += len(param_numpy.reshape(-1))
+                print ("[%d] name:[%s] shape:[%s]."%(p_idx,param_name,param_numpy.shape))
+                print ("    val:%s"%(param_numpy.reshape(-1)[:5]))
+        print ("Total number of parameters:[%s]."%(format(n_param,',d')))
+    
+    def init_weights(self):
+        from torch.utils import model_zoo
+        
+        # load weights and update label for the loaded state dict (weights)
+        if self.dict_weight is None:
+            weight_url = 'https://www.robots.ox.ac.uk/~albanie/models/pytorch-mcn/vgg_face_dag.pth'
+            self.dict_weight = model_zoo.load_url(weight_url)
+        vgg_labels = lst = [name for name, _ in self.model.named_parameters() if name.split(sep='.')[0]=='features']
+        vggface_weights = list(self.dict_weight.items())
+        vggface_weights = [(vgg_labels[idx], vggface_weights[idx][1]) for idx in range(len(vgg_labels))]
+        
+        self.model.load_state_dict(dict(vggface_weights), strict=False) # strict=False.. otherwise it raises Key Error
+        self.model.classifier = nn.Linear(25088, self.num_classes) ## really.. shouldn't hard code...
+
+
+# ResNet18 (pretrained)
+class ResNet18(nn.Module):
+    def __init__(self, num_classes):
+        import math
+        
+        super().__init__()
+        self.num_classes = num_classes
+        
+        self.model = models.resnet18(pretrained=True)
+        self.model.fc = torch.nn.Linear(in_features=512, out_features=self.num_classes, bias=True)
+        torch.nn.init.xavier_uniform_(self.model.fc.weight)
+        stdv = 1. / math.sqrt(self.model.fc.weight.size(1))
+        self.model.fc.bias.data.uniform_(-stdv, stdv)
+
+    def forward(self, x):
+        return self.model(x)
+    
 
 # Custom Model Template
 class MyModel(nn.Module):
