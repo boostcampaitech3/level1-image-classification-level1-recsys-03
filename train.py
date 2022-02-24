@@ -14,6 +14,7 @@ import torch
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 import model.model as model_model
 from dataset import MaskBaseDataset
@@ -148,7 +149,10 @@ def train(data_dir, model_dir, args):
     scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
 
     # -- logging
-    logger = SummaryWriter(log_dir=save_dir)
+    wandb.init(project="bc-ai-lv1-img-classification", entity="ijkimmy", sync_tensorboard=True) # wandb init must go before SummaryWriter
+    wandb.config.update(args) # update all of the arguments as config variables
+    
+    logger = SummaryWriter(log_dir=save_dir) #  tensorboard
     with open(os.path.join(save_dir, 'config.json'), 'w', encoding='utf-8') as f:
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
 
@@ -185,6 +189,11 @@ def train(data_dir, model_dir, args):
                 )
                 logger.add_scalar("Train/loss", train_loss, epoch * len(train_loader) + idx)
                 logger.add_scalar("Train/accuracy", train_acc, epoch * len(train_loader) + idx)
+                wandb.log({
+                    "Epoch": epoch * len(train_loader) + idx,
+                    "Train/loss": train_loss, 
+                    "Train/accuracy": train_acc
+                })
 
                 loss_value = 0
                 matches = 0
@@ -233,6 +242,12 @@ def train(data_dir, model_dir, args):
             logger.add_scalar("Val/loss", val_loss, epoch)
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
+            wandb.log({
+                "Epoch": epoch, 
+                "Val/loss": val_loss, 
+                "Val/accuracy": val_acc, 
+                "results": figure
+                })
             print()
 
 
