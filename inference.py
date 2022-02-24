@@ -6,11 +6,12 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
+import model.model as model_model
 from dataset import TestDataset, MaskBaseDataset
 
 
 def load_model(saved_model, num_classes, device):
-    model_cls = getattr(import_module("model"), args.model)
+    model_cls = getattr(model_model, args.model)
     model = model_cls(
         num_classes=num_classes
     )
@@ -20,7 +21,7 @@ def load_model(saved_model, num_classes, device):
     # tar.extractall(path=saved_model)
 
     model_path = os.path.join(saved_model, 'best.pth')
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.load_state_dict(torch.load(model_path, map_location=device), strict=False)
 
     return model
 
@@ -75,7 +76,7 @@ if __name__ == '__main__':
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_EVAL', '/opt/ml/input/data/eval'))
-    parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_CHANNEL_MODEL', './model'))
+    parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_CHANNEL_MODEL', './model/exp13'))
     parser.add_argument('--output_dir', type=str, default=os.environ.get('SM_OUTPUT_DATA_DIR', './output'))
 
     args = parser.parse_args()
