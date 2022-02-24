@@ -80,9 +80,16 @@ class VGGFace(nn.Module):
         vggface_weights = [(vgg_labels[idx], vggface_weights[idx][1]) for idx in range(len(vgg_labels))]
         
         self.model.load_state_dict(dict(vggface_weights), strict=False) # strict=False.. otherwise it raises Key Error
-        self.model.classifier = nn.Linear(25088, self.num_classes) ## really.. shouldn't hard code...
-
-
+        self.model.classifier = nn.Sequential(
+            nn.Linear(512*7*7, 4096),
+            nn.ReLU(True),
+            nn.Linear(4096, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, self.num_classes)
+        )
+        
+        
 # ResNet18 (pretrained)
 class ResNet18(nn.Module):
     def __init__(self, num_classes):
@@ -99,7 +106,26 @@ class ResNet18(nn.Module):
 
     def forward(self, x):
         return self.model(x)
-    
+
+
+# # Custom Model Template
+# class MyModel(nn.Module):
+#     def __init__(self, num_classes):
+#         super().__init__()
+
+#         """
+#         1. 위와 같이 생성자의 parameter 에 num_claases 를 포함해주세요.
+#         2. 나만의 모델 아키텍쳐를 디자인 해봅니다.
+#         3. 모델의 output_dimension 은 num_classes 로 설정해주세요.
+#         """
+
+#     def forward(self, x):
+#         """
+#         1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
+#         2. 결과로 나온 output 을 return 해주세요
+#         """
+#         return x
+
 
 # Custom Model Template
 class MyModel(nn.Module):
