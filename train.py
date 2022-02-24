@@ -98,6 +98,7 @@ def train(data_dir, model_dir, args):
     dataset_module = getattr(import_module("dataset"), args.dataset)  # default: MaskBaseDataset
     dataset = dataset_module(
         data_dir=data_dir,
+        label=args.label,
     )
     num_classes = dataset.num_classes  # 18
 
@@ -274,6 +275,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_decay_step', type=int, default=20, help='learning rate scheduler deacy step (default: 20)')
     parser.add_argument('--log_interval', type=int, default=20, help='how many batches to wait before logging training status')
     parser.add_argument('--name', default='exp', help='model save at {SM_MODEL_DIR}/{name}')
+    parser.add_argument('--label', type=str, default='multi', help='label of the data (default: multi)')
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/train/images'))
@@ -283,6 +285,7 @@ if __name__ == '__main__':
     print(args)
 
     data_dir = args.data_dir
-    model_dir = args.model_dir
+    model_dir = args.model_dir + '/' + args.label
 
     train(data_dir, model_dir, args)
+    
