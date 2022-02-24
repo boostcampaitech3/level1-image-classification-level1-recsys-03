@@ -108,26 +108,25 @@ class ResNet18(nn.Module):
         return self.model(x)
 
 
-# separate models per task (label: mask, age, gender)
-class MyModel(nn.Module):
-    def __init__(self, num_classes, model_mask, model_gender, model_age):
-        super().__init__()
-        self.model_mask = model_mask
-        self.model_gender = model_gender
-        self.model_age = model_age
-        self.num_classes = num_classes
+# # separate models per task (label: mask, age, gender)
+# class ModelWrapper(nn.Module):
+#     def __init__(self, num_classes, model_mask, model_gender, model_age):
+#         super().__init__()
+#         self.model_mask = model_mask
+#         self.model_gender = model_gender
+#         self.model_age = model_age
+#         self.num_classes = num_classes
 
-    def forward(self, x):
-        label_mask = self.model_mask(3)
-        label_gender = self.model_gender(2)
-        label_age = self.model_age(3)
-
-        return x
+#     def forward(self, x):
+#         label_mask = self.model_mask(x)
+#         label_gender = self.model_gender(x)
+#         label_age = self.model_age(x)
+#         return None
 
 
 # Custom Model Template
 class MyModel(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, *args, **kwargs):
         super().__init__()
 
         """
