@@ -8,7 +8,7 @@ from torchvision import models
 
 
 class BaseModel(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, *args, **kwargs):
         super().__init__()
 
         self.conv1 = nn.Conv2d(3, 32, kernel_size=7, stride=1)
@@ -42,7 +42,7 @@ class BaseModel(nn.Module):
 # https://www.robots.ox.ac.uk/~albanie/models/pytorch-mcn/vgg_face_dag.pth
 ###########################################################################################
 class VGGFace(nn.Module):
-    def __init__(self, num_classes, dict_weight: OrderedDict=None):
+    def __init__(self, num_classes, dict_weight: OrderedDict=None, *args, **kwargs):
         super().__init__()
         self.model = models.vgg16()
         self.num_classes = num_classes
@@ -92,7 +92,7 @@ class VGGFace(nn.Module):
         
 # ResNet18 (pretrained)
 class ResNet18(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, *args, **kwargs):
         import math
         
         super().__init__()
@@ -108,23 +108,21 @@ class ResNet18(nn.Module):
         return self.model(x)
 
 
-# # Custom Model Template
-# class MyModel(nn.Module):
-#     def __init__(self, num_classes):
-#         super().__init__()
+# separate models per task (label: mask, age, gender)
+class MyModel(nn.Module):
+    def __init__(self, num_classes, model_mask, model_gender, model_age):
+        super().__init__()
+        self.model_mask = model_mask
+        self.model_gender = model_gender
+        self.model_age = model_age
+        self.num_classes = num_classes
 
-#         """
-#         1. 위와 같이 생성자의 parameter 에 num_claases 를 포함해주세요.
-#         2. 나만의 모델 아키텍쳐를 디자인 해봅니다.
-#         3. 모델의 output_dimension 은 num_classes 로 설정해주세요.
-#         """
+    def forward(self, x):
+        label_mask = self.model_mask(3)
+        label_gender = self.model_gender(2)
+        label_age = self.model_age(3)
 
-#     def forward(self, x):
-#         """
-#         1. 위에서 정의한 모델 아키텍쳐를 forward propagation 을 진행해주세요
-#         2. 결과로 나온 output 을 return 해주세요
-#         """
-#         return x
+        return x
 
 
 # Custom Model Template
