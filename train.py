@@ -151,6 +151,7 @@ def train(data_dir, model_dir, args):
 
     # -- logging
     wandb.init(project="bc-ai-lv1-img-classification", entity="ijkimmy", sync_tensorboard=True) # wandb init must go before SummaryWriter
+    wandb.run.name = args.name
     wandb.config.update(args) # update all of the arguments as config variables
     
     logger = SummaryWriter(log_dir=save_dir) #  tensorboard
