@@ -7,7 +7,7 @@ from typing import Tuple, List
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import Dataset, Subset, random_split
+from torch.utils.data import Dataset, Subset, random_split, WeightedRandomSampler
 from torchvision import transforms
 from torchvision.transforms import *
 
@@ -118,7 +118,7 @@ class MaskBaseDataset(Dataset):
         "incorrect_mask": MaskLabels.INCORRECT,
         "normal": MaskLabels.NORMAL
     }
-
+    
     image_paths = []
     
     mask_labels = []
@@ -130,7 +130,7 @@ class MaskBaseDataset(Dataset):
         self.mean = mean
         self.std = std
         self.val_ratio = val_ratio # validation ratio 
-
+        
         self.transform = None
         self.setup()
         self.calc_statistics()
@@ -249,14 +249,39 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
     #   [0.5573112  0.52429302 0.50174594] [0.61373778 0.58633636 0.56743769]
     def __init__(self, data_dir, label='multi', mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         self.indices = defaultdict(list)
+        self.label = label
+        self.multi_labels = []
+        
         super().__init__(data_dir, mean, std, val_ratio)
+        
+        if self.label == 'multi':
+            self.num_classes = 3 * 2 * 3
+            self.target_label = self.multi_labels
+        elif self.label == 'mask':
+            self.num_classes = 3
+            self.target_label = self.mask_labels
+        elif self.label == 'gender':
+            self.num_classes = 2
+            self.target_label = self.gender_labels
+        elif self.label == 'age':
+            self.num_classes = 3
+            self.target_label = self.age_labels
+        else:
+            raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
+
+    def __getitem__(self, index):
+        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+
+        image = self.read_image(index)
+        image_transform = self.transform(image)
+        return image_transform, int(self.target_label[index])
 
     @staticmethod
     def _split_profile(profiles, val_ratio):
         length = len(profiles)
         n_val = int(length * val_ratio)
 
-        val_indices = set(random.choices(range(length), k=n_val))
+        val_indices = set(random.sample(range(length), k=n_val))
         train_indices = set(range(length)) - val_indices
         return {
             "train": train_indices,
@@ -289,12 +314,21 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     self.mask_labels.append(mask_label)
                     self.gender_labels.append(gender_label)
                     self.age_labels.append(age_label)
+                    self.multi_labels.append(self.encode_multi_class(mask_label, gender_label, age_label))
 
                     self.indices[phase].append(cnt)
                     cnt += 1
 
     def split_dataset(self) -> List[Subset]:
         return [Subset(self, indices) for phase, indices in self.indices.items()]
+    
+    def get_weighted_sampler(self) -> WeightedRandomSampler:
+        train_labels = [self.target_label[indices] for phase, indices in self.indices.items()]
+        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)])
+        weights = 1. / torch.tensor(class_counts, dtype=torch.float)
+        samples_weights = weights[train_labels]
+        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+            
 
 
 class TestDataset(Dataset):
