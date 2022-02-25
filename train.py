@@ -19,7 +19,7 @@ import wandb
 import model.model as model_model
 from dataset import MaskBaseDataset
 from model.loss import create_criterion
-from util import EarlyStopping
+from utils.util import EarlyStopping
 
 
 def seed_everything(seed):
@@ -224,7 +224,7 @@ def train(data_dir, model_dir, args):
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
 
-                loss_item = criterion(outs, labels).item()
+                loss_item = criterion(outs, labels).item() # .item(): 1d-tensor -> python primitives (memory efficient)
                 acc_item = (labels == preds).sum().item()
                 val_loss_items.append(loss_item)
                 val_acc_items.append(acc_item)
