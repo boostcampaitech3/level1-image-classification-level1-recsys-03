@@ -60,8 +60,8 @@ class CustomAugmentation:
         self.transform =  Compose([
             CenterCrop(320, 256, p=1.),
             Resize(resize[0], resize[1], Image.BILINEAR, p=1.),
-            ShiftScaleRotate(shift_limit=0.05, rotate_limit=20, p=1.),
-            RandomBrightnessContrast(p=1.),
+            ShiftScaleRotate(shift_limit=0.05, rotate_limit=20, p=.7),
+            RandomBrightnessContrast(p=.7),
             ColorJitter(0.1, 0.1, 0.1, 0.1),
             OneOf([
                 FancyPCA(p=1.),
@@ -335,12 +335,28 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         return [Subset(self, indices) for phase, indices in self.indices.items()]
     
     def get_weighted_sampler(self) -> WeightedRandomSampler:
+        """
+        returns WeightedRandomSampler based on the distribution of the train label
+        used to prevent overfitting due to unbalanced dataset
+        """
+        train_index = self.indices['train'] # indices of train dataset
+        train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
+        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
+        weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
+        samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
+        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+
+    def compute_class_weight(self) -> torch.tensor:
+        """
+        estimate class weights for unbalanced dataset
+        `` 1 - n_sample / sum(n_samples) ````
+        used for loss function: weighted_cross_entropy
+        """
         train_index = self.indices['train']
         train_labels = [self.target_label[idx] for idx in train_index]
-        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)])
-        weights = 1. / torch.tensor(class_counts, dtype=torch.float)
-        samples_weights = weights[train_labels]
-        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+        _, n_samples = np.unique(train_labels, return_counts=True)
+        norm_weights = [1 - (sample / sum(n_samples)) for sample in n_samples]
+        return torch.tensor(norm_weights, dtype=torch.float).to(device='cuda')
 
 
 class TestDataset(Dataset):

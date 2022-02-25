@@ -152,6 +152,8 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model) # implements data parallelism at the module level
 
     # -- loss & metric
+    class_weight = dataset.compute_class_weight()
+    # criterion = create_criterion(args.criterion, **{'weight':class_weight})  # weighted_cross_entropy
     criterion = create_criterion(args.criterion)  # default: cross_entropy
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
@@ -171,7 +173,7 @@ def train(data_dir, model_dir, args):
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
     
     # -- early stopping
-    early_stopping = EarlyStopping(patience=5, min_delta=0.0)
+    early_stopping = EarlyStopping(patience=10, min_delta=0.0)
 
     best_val_acc = 0
     best_val_loss = np.inf
