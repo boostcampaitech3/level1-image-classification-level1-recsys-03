@@ -107,6 +107,8 @@ class AgeLabels(int, Enum):
 
 
 class MaskBaseDataset(Dataset):
+    num_classes = 3 * 2 * 3
+
     _file_names = {
         "mask1": MaskLabels.MASK,
         "mask2": MaskLabels.MASK,
@@ -118,29 +120,16 @@ class MaskBaseDataset(Dataset):
     }
 
     image_paths = []
- 
+    
     mask_labels = []
     gender_labels = []
     age_labels = []
-    multi_labels = []
 
-    def __init__(self, data_dir, label='multi', mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         self.data_dir = data_dir
         self.mean = mean
         self.std = std
         self.val_ratio = val_ratio # validation ratio 
-        self.label = label
-        
-        if self.label == 'multi':
-            self.num_classes = 3 * 2 * 3
-        elif self.label == 'mask':
-            self.num_classes = 3
-        elif self.label == 'gender':
-            self.num_classes = 2
-        elif self.label == 'age':
-            self.num_classes = 3
-        else:
-            raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
 
         self.transform = None
         self.setup()
@@ -169,7 +158,6 @@ class MaskBaseDataset(Dataset):
                 self.mask_labels.append(mask_label)
                 self.gender_labels.append(gender_label)
                 self.age_labels.append(age_label)
-                self.multi_labels.append(self.encode_multi_class(mask_label, gender_label, age_label))
 
     def calc_statistics(self):
         has_statistics = self.mean is not None and self.std is not None
@@ -193,23 +181,16 @@ class MaskBaseDataset(Dataset):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
 
         image = self.read_image(index)
+        mask_label = self.get_mask_label(index)
+        gender_label = self.get_gender_label(index)
+        age_label = self.get_age_label(index)
+        multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
+
         image_transform = self.transform(image)
-        return image_transform, self.get_label(index)
+        return image_transform, multi_class_label
 
     def __len__(self):
         return len(self.image_paths)
-    
-    def get_label(self, idx):
-        if self.label == 'multi':
-            return self.get_multi_label(idx)
-        elif self.label == 'mask':
-            return self.get_mask_label(idx)
-        elif self.label == 'gender':
-            return self.get_gender_label(idx)
-        elif self.label == 'age':
-            return self.get_age_label(idx)
-        else:
-            raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
 
     def get_mask_label(self, index) -> MaskLabels:
         return self.mask_labels[index]
@@ -219,9 +200,6 @@ class MaskBaseDataset(Dataset):
 
     def get_age_label(self, index) -> AgeLabels:
         return self.age_labels[index]
-    
-    def get_multi_label(self, index):
-        return self.multi_labels[index]
 
     def read_image(self, index):
         image_path = self.image_paths[index]
@@ -246,11 +224,6 @@ class MaskBaseDataset(Dataset):
         img_cp *= 255.0
         img_cp = np.clip(img_cp, 0, 255).astype(np.uint8)
         return img_cp
-
-    # def WeightedRandomSampler(self) -> WeightedRandomSampler:
-    #     """
-    #     """
-    #     return None
 
     def split_dataset(self) -> Tuple[Subset, Subset]:
         """
@@ -277,7 +250,6 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
     def __init__(self, data_dir, label='multi', mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         self.indices = defaultdict(list)
         super().__init__(data_dir, mean, std, val_ratio)
-        self.label = label
 
     @staticmethod
     def _split_profile(profiles, val_ratio):
@@ -317,7 +289,6 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                     self.mask_labels.append(mask_label)
                     self.gender_labels.append(gender_label)
                     self.age_labels.append(age_label)
-                    self.multi_labels.append(self.encode_multi_class(mask_label, gender_label, age_label))
 
                     self.indices[phase].append(cnt)
                     cnt += 1
@@ -344,3 +315,4 @@ class TestDataset(Dataset):
 
     def __len__(self):
         return len(self.img_paths)
+    
