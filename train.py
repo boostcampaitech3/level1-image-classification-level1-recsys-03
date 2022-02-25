@@ -19,6 +19,7 @@ import wandb
 import model.model as model_model
 from dataset import MaskBaseDataset
 from model.loss import create_criterion
+from util import EarlyStopping
 
 
 def seed_everything(seed):
@@ -114,7 +115,7 @@ def train(data_dir, model_dir, args):
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
     
-    sampler = dataset.get_weighted_sampler()
+    sampler = dataset.get_weighted_sampler() # sampler (using weights of imblanace classes)
 
     train_loader = DataLoader(
         train_set,
@@ -160,6 +161,9 @@ def train(data_dir, model_dir, args):
     logger = SummaryWriter(log_dir=save_dir) #  tensorboard
     with open(os.path.join(save_dir, 'config.json'), 'w', encoding='utf-8') as f:
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
+    
+    # -- early stopping
+    early_stopping = EarlyStopping(patience=3, min_delta=0.0)
 
     best_val_acc = 0
     best_val_loss = np.inf
@@ -235,6 +239,12 @@ def train(data_dir, model_dir, args):
             val_loss = np.sum(val_loss_items) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, val_loss)
+            
+            early_stopping(val_loss)
+            if early_stopping.stop:
+                print("Early Stopping")
+                break
+            
             if val_acc > best_val_acc:
                 print(f"New best model for val accuracy : {val_acc:4.2%}! saving the best model..")
                 torch.save(model.module.state_dict(), f"{save_dir}/best.pth")

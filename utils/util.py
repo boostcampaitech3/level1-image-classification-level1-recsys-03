@@ -65,3 +65,31 @@ class MetricTracker:
 
     def result(self):
         return dict(self._data.average)
+
+
+class EarlyStopping:
+    """
+    Ref: https://pytorch.org/ignite/_modules/ignite/handlers/early_stopping.html#EarlyStopping
+    stop early when there's no improvement after specified number of times
+    patience (int): number of iterations that had no improvements
+    min_delta (float): threshold improvement 
+    """
+    def __init__(self, patience: int=5, min_delta: float=0.0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best = None
+        self.counter = 0
+        self.stop = False
+        
+    def __call__(self, loss):
+        score = -loss
+        
+        if self.best is None:
+            self.best = score
+        elif score < self.best + self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.stop = True
+        else:
+            self.best = score
+            self.counter = 0
