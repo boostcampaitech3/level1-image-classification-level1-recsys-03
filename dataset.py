@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset, Subset, random_split, WeightedRandomSampler
-from torchvision import transforms
+# from torchvision import transforms
 # from torchvision.transforms import *
 from albumentations import *
 from albumentations.pytorch import ToTensorV2
@@ -283,8 +283,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
     def __getitem__(self, index):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
 
-        image = self.read_image(index)
-        image_np = np.array(image)
+        image_np = self.read_image(index)
+        # image_np = np.array(image)
         image_transform = self.transform(image_np)['image']
         return image_transform, int(self.target_label[index])
 
@@ -346,18 +346,19 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
 class TestDataset(Dataset):
     def __init__(self, img_paths, resize, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246)):
         self.img_paths = img_paths
-        self.transform = transforms.Compose([
-            Resize(resize, Image.BILINEAR),
-            ToTensor(),
+        self.transform = Compose([
+            Resize(resize[0], resize[1], Image.BILINEAR),
             Normalize(mean=mean, std=std),
+            ToTensorV2(),
         ])
 
     def __getitem__(self, index):
         image = Image.open(self.img_paths[index])
 
         if self.transform:
-            image = self.transform(image)
-        return image
+            image_np = np.array(image)
+            trans_image = self.transform(image=image_np)['image']
+        return trans_image
 
     def __len__(self):
         return len(self.img_paths)

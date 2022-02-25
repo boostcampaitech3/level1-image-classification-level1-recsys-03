@@ -30,13 +30,8 @@ def load_model(saved_model, num_classes, device):
 def inference(data_dir, model_dir, output_dir, args):
     """
     """
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
-
-    num_classes = MaskBaseDataset.num_classes  # 18
-    model = load_model(model_dir, num_classes, device).to(device)
-    model.eval()
-
+    import numpy as np
+    
     img_root = os.path.join(data_dir, 'images')
     info_path = os.path.join(data_dir, 'info.csv')
     info = pd.read_csv(info_path)
@@ -48,11 +43,37 @@ def inference(data_dir, model_dir, output_dir, args):
         batch_size=args.batch_size,
         num_workers=8,
         shuffle=False,
-        pin_memory=use_cuda,
+        pin_memory=torch.cuda.is_available(),
         drop_last=False,
     )
+    
+    preds = []
+    lst_labels = ['age', 'gender', 'mask']
+    if 'multi' in args.label:
+        preds = inference_model(loader, model_dir[0], 18)
+    elif all(item in args.label for item in lst_labels):
+        index = {name: args.label.index(name) for name in lst_labels}
+        pred_age = np.array(inference_model(loader, model_dir[index['age']], 3))
+        pred_gender = np.array(inference_model(loader, model_dir[index['gender']], 2))
+        pred_mask = np.array(inference_model(loader, model_dir[index['mask']], 3))
+        preds = pred_mask * 6 + pred_gender * 3 + pred_age
+    # else:
+    #     raise ValueError(f"Must pass either 1 or 3 models.. passed {len(model_dir)}")
+    
+    info['ans'] = preds
+    info.to_csv(os.path.join(output_dir, f'output.csv'), index=False)
+    print(f'Inference Done!')
 
-    print("Calculating inference results..")
+
+@torch.no_grad()
+def inference_model(loader, model_dir, num_classes) -> list:
+    # num_classes = MaskBaseDataset.num_classes  # 18
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    model = load_model(model_dir, num_classes, device).to(device)
+    model.eval()
+
+    print(f"Calculating inference results for {model_dir}..")
     preds = []
     with torch.no_grad():
         for idx, images in enumerate(loader):
@@ -61,9 +82,7 @@ def inference(data_dir, model_dir, output_dir, args):
             pred = pred.argmax(dim=-1)
             preds.extend(pred.cpu().numpy())
 
-    info['ans'] = preds
-    info.to_csv(os.path.join(output_dir, f'output.csv'), index=False)
-    print(f'Inference Done!')
+    return preds
 
 
 if __name__ == '__main__':
@@ -73,10 +92,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')
     parser.add_argument('--resize', type=tuple, default=(96, 128), help='resize size for image when you trained (default: (96, 128))')
     parser.add_argument('--model', type=str, default='BaseModel', help='model type (default: BaseModel)')
+    parser.add_argument('--label', nargs='+', default='multi')
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_EVAL', '/opt/ml/input/data/eval'))
-    parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_CHANNEL_MODEL', './model'))
+    parser.add_argument('--model_dir', nargs='+', default=os.environ.get('SM_CHANNEL_MODEL', './model'))
     parser.add_argument('--output_dir', type=str, default=os.environ.get('SM_OUTPUT_DATA_DIR', './output'))
 
     args = parser.parse_args()
