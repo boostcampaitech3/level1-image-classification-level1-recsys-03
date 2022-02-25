@@ -17,6 +17,7 @@
 ### Evaluation
 - `SM_GROUND_TRUTH_DIR=[GT dir] SM_OUTPUT_DATA_DIR=[inference output dir] python evaluation.py`
 
+---
 
 # PyTorch Template Project
 PyTorch deep learning project made easy.
