@@ -9,7 +9,9 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset, Subset, random_split, WeightedRandomSampler
 from torchvision import transforms
-from torchvision.transforms import *
+# from torchvision.transforms import *
+from albumentations import *
+from albumentations.pytorch import ToTensorV2
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
@@ -23,14 +25,14 @@ def is_image_file(filename):
 
 class BaseAugmentation:
     def __init__(self, resize, mean, std, **args):
-        self.transform = transforms.Compose([
-            Resize(resize, Image.BILINEAR),
-            ToTensor(),
-            Normalize(mean=mean, std=std),
-        ])
+        self.transform = Compose([
+            Resize(resize[0], resize[1], Image.BILINEAR, p=1.),
+            Normalize(mean=mean, std=std, max_pixel_value=255., p=1.),
+            ToTensorV2(p=1.),
+        ], p=1.)
 
     def __call__(self, image):
-        return self.transform(image)
+        return self.transform(image=image)
 
 
 class AddGaussianNoise(object):
@@ -52,18 +54,26 @@ class AddGaussianNoise(object):
 
 class CustomAugmentation:
     def __init__(self, resize, mean, std, **args):
-        self.transform = transforms.Compose([
-            CenterCrop((320, 256)),
-            Resize(resize, Image.BILINEAR),
+        self.resize = resize
+        self.mean = mean
+        self.std = std
+        self.transform =  Compose([
+            CenterCrop(320, 256, p=1.),
+            Resize(resize[0], resize[1], Image.BILINEAR, p=1.),
+            ShiftScaleRotate(shift_limit=0.05, rotate_limit=20, p=1.),
+            RandomBrightnessContrast(p=1.),
             ColorJitter(0.1, 0.1, 0.1, 0.1),
-            ToTensor(),
+            OneOf([
+                FancyPCA(p=1.),
+                GaussNoise(p=.5),
+            ], p=1.),
             Normalize(mean=mean, std=std),
-            AddGaussianNoise()
-        ])
+            ToTensorV2(p=1.0),
+        ], p=1.)
 
-    def __call__(self, image):
-        return self.transform(image)
-
+    def __call__(self, type, image):
+        return self.transform(image=image)
+    
 
 class MaskLabels(int, Enum):
     MASK = 0
@@ -180,13 +190,14 @@ class MaskBaseDataset(Dataset):
     def __getitem__(self, index):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
 
-        image = self.read_image(index)
         mask_label = self.get_mask_label(index)
         gender_label = self.get_gender_label(index)
         age_label = self.get_age_label(index)
         multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
 
-        image_transform = self.transform(image)
+        image = self.read_image(index)
+        image_np = np.array(image)
+        image_transform = self.transform(image_np)['image']
         return image_transform, multi_class_label
 
     def __len__(self):
@@ -203,7 +214,7 @@ class MaskBaseDataset(Dataset):
 
     def read_image(self, index):
         image_path = self.image_paths[index]
-        return Image.open(image_path)
+        return np.array(Image.open(image_path))
 
     @staticmethod
     def encode_multi_class(mask_label, gender_label, age_label) -> int:
@@ -273,7 +284,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
 
         image = self.read_image(index)
-        image_transform = self.transform(image)
+        image_np = np.array(image)
+        image_transform = self.transform(image_np)['image']
         return image_transform, int(self.target_label[index])
 
     @staticmethod
@@ -329,7 +341,6 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         weights = 1. / torch.tensor(class_counts, dtype=torch.float)
         samples_weights = weights[train_labels]
         return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
-            
 
 
 class TestDataset(Dataset):

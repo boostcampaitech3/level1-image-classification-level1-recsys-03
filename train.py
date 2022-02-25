@@ -104,17 +104,25 @@ def train(data_dir, model_dir, args):
     num_classes = dataset.num_classes  # 18
 
     # -- augmentation
-    transform_module = getattr(import_module("dataset"), args.augmentation)  # default: BaseAugmentation
+    train_set, val_set = dataset.split_dataset()
+    
+    transform_module = getattr(import_module("dataset"), args.augmentation)  
     transform = transform_module(
         resize=args.resize,
         mean=dataset.mean,
         std=dataset.std,
     )
-    dataset.set_transform(transform)
-
-    # -- data_loader
-    train_set, val_set = dataset.split_dataset()
+    train_set.dataset.set_transform(transform)
     
+    transform_module = getattr(import_module("dataset"), 'BaseAugmentation')  
+    transform = transform_module(
+        resize=args.resize,
+        mean=dataset.mean,
+        std=dataset.std,
+    )
+    val_set.dataset.set_transform(transform)
+        
+    # -- data_loader
     sampler = dataset.get_weighted_sampler() # sampler (using weights of imblanace classes)
 
     train_loader = DataLoader(
@@ -163,7 +171,7 @@ def train(data_dir, model_dir, args):
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
     
     # -- early stopping
-    early_stopping = EarlyStopping(patience=3, min_delta=0.0)
+    early_stopping = EarlyStopping(patience=5, min_delta=0.0)
 
     best_val_acc = 0
     best_val_loss = np.inf
@@ -277,7 +285,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')
     parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train (default: 1)')
     parser.add_argument('--dataset', type=str, default='MaskSplitByProfileDataset', help='dataset augmentation type (default: MaskSplitByProfileDataset)')
-    parser.add_argument('--augmentation', type=str, default='BaseAugmentation', help='data augmentation type (default: BaseAugmentation)')
+    parser.add_argument('--augmentation', type=str, default='CustomAugmentation', help='data augmentation type (default: BaseAugmentation)')
     parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--valid_batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')
