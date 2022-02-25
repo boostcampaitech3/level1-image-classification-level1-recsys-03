@@ -323,7 +323,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         return [Subset(self, indices) for phase, indices in self.indices.items()]
     
     def get_weighted_sampler(self) -> WeightedRandomSampler:
-        train_labels = [self.target_label[indices] for phase, indices in self.indices.items()]
+        train_index = self.indices['train']
+        train_labels = [self.target_label[idx] for idx in train_index]
         class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)])
         weights = 1. / torch.tensor(class_counts, dtype=torch.float)
         samples_weights = weights[train_labels]

@@ -113,14 +113,17 @@ def train(data_dir, model_dir, args):
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
+    
+    sampler = dataset.get_weighted_sampler()
 
     train_loader = DataLoader(
         train_set,
         batch_size=args.batch_size,
         num_workers=multiprocessing.cpu_count()//2,
-        shuffle=True,
+        # shuffle=True,
         pin_memory=use_cuda,
         drop_last=True,
+        sampler=sampler,
     )
 
     val_loader = DataLoader(
