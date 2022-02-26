@@ -340,17 +340,17 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         used to prevent overfitting due to unbalanced dataset
         """
         # v0: weights
-        # train_index = self.indices['train'] # indices of train dataset
-        # train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
-        # class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
-        # weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
-        # samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
-        # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+        train_index = self.indices['train'] # indices of train dataset
+        train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
+        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
+        weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
+        samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
+        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
         # v1: normalized weights
-        train_index = self.indices['train']
-        class_weight = self.compute_class_weight()
-        sample_weight = [class_weight[self.target_label[idx]] for idx in train_index]
-        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+        # train_index = self.indices['train']
+        # class_weight = self.compute_class_weight()
+        # sample_weight = [class_weight[self.target_label[idx]] for idx in train_index]
+        # return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
 
     def compute_class_weight(self) -> torch.tensor:
         """
