@@ -8,12 +8,12 @@ import re
 from importlib import import_module
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import matplotlib.pyplot as plt
 import wandb
 
 import model.model as model_model
@@ -86,6 +86,20 @@ def increment_path(path, exist_ok=False):
         return f"{path}{n}"
 
 
+def parse_model_param(params:str, pretrained: bool) -> dict:
+    if pretrained:
+        model_param = {}
+        model_names = ['resnet', 'alexnet', 'vgg', 'squeezenet', 'densenet', 'inception']
+        for param in params:
+            if param.lower() in model_names:
+                model_param['model_name'] = param.lower()
+            if param.lower() == 'true':
+                model_param['feature_extract'] = True
+            elif param.lower() == 'false':
+                model_param['feature_extract'] = False
+        return model_param
+
+
 def train(data_dir, model_dir, args):
     seed_everything(args.seed)
 
@@ -122,7 +136,7 @@ def train(data_dir, model_dir, args):
     )
     val_set.dataset.set_transform(transform)
         
-    # -- data_loader
+    -- data_loader
     sampler = dataset.get_weighted_sampler() # sampler (using weights of imblanace classes)
 
     train_loader = DataLoader(
@@ -145,16 +159,18 @@ def train(data_dir, model_dir, args):
     )
 
     # -- model
+    model_param = parse_model_param(args.model_param, 'Pretrained' in args.model)
     model_module = getattr(model_model, args.model)  # default: BaseModel
     model = model_module(
-        num_classes=num_classes
+        num_classes=num_classes, 
+        **model_param
     ).to(device)
     model = torch.nn.DataParallel(model) # implements data parallelism at the module level
 
     # -- loss & metric
     class_weight = dataset.compute_class_weight()
-    # criterion = create_criterion(args.criterion, **{'weight':class_weight})  # weighted_cross_entropy
-    criterion = create_criterion(args.criterion)  # default: cross_entropy
+    criterion = create_criterion(args.criterion, **{'weight':class_weight})  # weighted_cross_entropy
+    # criterion = create_criterion(args.criterion)  # default: cross_entropy
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -292,6 +308,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--valid_batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')
     parser.add_argument('--model', type=str, default='BaseModel', help='model type (default: BaseModel)')
+    parser.add_argument('--model_param', nargs='+', default='resnet false', help='model type (default: BaseModel)')
     parser.add_argument('--optimizer', type=str, default='SGD', help='optimizer type (default: SGD)')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
     parser.add_argument('--val_ratio', type=float, default=0.2, help='ratio for validaton (default: 0.2)')

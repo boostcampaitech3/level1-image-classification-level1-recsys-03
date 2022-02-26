@@ -88,24 +88,70 @@ class VGGFace(nn.Module):
             nn.Dropout(),
             nn.Linear(4096, self.num_classes)
         )
-        
-        
-# ResNet18 (pretrained)
-class ResNet18(nn.Module):
-    def __init__(self, num_classes, *args, **kwargs):
-        import math
-        
+
+
+# Pretrained Models 
+# https://tutorials.pytorch.kr/beginner/finetuning_torchvision_models_tutorial.html
+class PretrainedModels(nn.Module):
+    def __init__(self, num_classes, model_name: str='resnet', feature_extract: bool=False, **kwargs):
         super().__init__()
         self.num_classes = num_classes
-        
-        self.model = models.resnet18(pretrained=True)
-        self.model.fc = torch.nn.Linear(in_features=512, out_features=self.num_classes, bias=True)
-        torch.nn.init.xavier_uniform_(self.model.fc.weight)
-        stdv = 1. / math.sqrt(self.model.fc.weight.size(1))
-        self.model.fc.bias.data.uniform_(-stdv, stdv)
+        self.model_name = model_name
+        self.feature_extract = feature_extract
+        self.model = None
+        self.input_size = None
+
+        self.init_model()        
 
     def forward(self, x):
         return self.model(x)
+
+    def init_model(self):
+        if self.model_name == 'resnet':
+            self.model = models.resnet18(pretrained=True)
+            self.set_param_requires_grad()
+            in_features = self.model.fc.in_features  # 512
+            self.model.fc = torch.nn.Linear(in_features=in_features, out_features=self.num_classes)
+            self.input_size = 224
+        elif self.model_name == 'alexnet':
+            self.model = models.alexnet(pretrained=True)
+            self.set_param_requires_grad() #4096
+            in_features = self.model.classifier[6].in_features
+            self.model.classifier[6] = nn.Linear(in_features, self.num_classes)
+            self.input_size = 224
+        elif self.model_name == 'vgg':
+            self.model = models.vgg16(pretrained=True)
+            self.set_param_requires_grad() # 4096
+            in_features = self.model.classifier[6].in_features
+            self.model.classifier[6] = nn.Linear(in_features, self.num_classes)
+            self.input_size = 224
+        elif self.model_name == "squeezenet":
+            self.model = models.squeezenet1_0(pretrained=True)
+            self.set_parameter_requires_grad(self.model)
+            self.model.classifier[1] = nn.Conv2d(512, self.num_classes, kernel_size=(1,1), stride=(1,1))
+            self.model.num_classes = self.num_classes
+            self.input_size = 224
+        elif self.model_name == "densenet":
+            self.model = models.densenet121(pretrained=True)
+            self.set_parameter_requires_grad(self.model)
+            num_ftrs = self.model.classifier.in_features
+            self.model.classifier = nn.Linear(num_ftrs, self.num_classes) 
+            self.input_size = 224
+        elif self.model_name == 'inception':
+            self.model = models.inception_v3(pretrained=True)
+            self.set_param_requires_grad() 
+            num_ftrs = self.model.AuxLogits.fc.in_features # 768, Handle the auxilary net
+            self.model.AuxLogits.fc = nn.Linear(num_ftrs, self.num_classes)
+            num_ftrs = self.model.fc.in_features # Handle the primary net
+            self.model.fc = nn.Linear(num_ftrs,self.num_classes)
+            self.input_size = 299
+        else:
+            raise ValueError(f'Expected alexnet, vgg, resnet, or inception, but received {self.model}..')
+
+    def set_param_requires_grad(self):
+        if self.feature_extract:
+            for param in self.model.parameters():
+                param.requires_grad = False
 
 
 # # separate models per task (label: mask, age, gender)
