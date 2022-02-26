@@ -137,7 +137,7 @@ def train(data_dir, model_dir, args):
     val_set.dataset.set_transform(transform)
         
     # -- data_loader
-    sampler = dataset.get_weighted_sampler() # sampler (using weights of imblanace classes)
+    sampler = dataset.get_weighted_sampler() # WeightedRandomSampler
 
     train_loader = DataLoader(
         train_set,
