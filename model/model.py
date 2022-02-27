@@ -138,13 +138,13 @@ class PretrainedModels(nn.Module):
             self.input_size = 224
         elif self.model_name == "squeezenet":
             self.model = models.squeezenet1_0(pretrained=True)
-            self.set_parameter_requires_grad(self.model)
+            self.set_param_requires_grad(self.model)
             self.model.classifier[1] = nn.Conv2d(512, self.num_classes, kernel_size=(1,1), stride=(1,1))
             self.model.num_classes = self.num_classes
             self.input_size = 224
         elif self.model_name == "densenet":
             self.model = models.densenet121(pretrained=True)
-            self.set_parameter_requires_grad(self.model)
+            self.set_param_requires_grad(self.model)
             num_ftrs = self.model.classifier.in_features
             self.model.classifier = nn.Linear(num_ftrs, self.num_classes) 
             self.input_size = 224
