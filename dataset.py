@@ -71,7 +71,27 @@ class CustomAugmentation:
             ToTensorV2(p=1.0),
         ], p=1.)
 
-    def __call__(self, type, image):
+    def __call__(self, image):
+        return self.transform(image=image)
+
+
+class RandAugmentation:
+    def __init__(self, resize, mean, std, **args):
+        self.resize = resize
+        self.mean = mean
+        self.std = std
+        self.transform =  Compose([
+            ShiftScaleRotate(shift_limit=0.05, rotate_limit=20, p=.7),
+            RandomBrightnessContrast(p=.7),
+            OneOf([
+                FancyPCA(p=1.),
+                GaussNoise(p=.5),
+            ], p=1.),
+            Normalize(mean=mean, std=std),
+            ToTensorV2(p=1.0),
+        ], p=1.)
+
+    def __call__(self, image):
         return self.transform(image=image)
     
 
@@ -313,9 +333,12 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                 include_mask = True
                 profile = profiles[_idx]
                 img_folder = os.path.join(self.data_dir, profile)
+                # for file_name in random.shuffle(os.listdir(img_folder)):
                 for file_name in os.listdir(img_folder):
                     _file_name, ext = os.path.splitext(file_name)
                     if _file_name not in self._file_names:  # "." 로 시작하는 파일 및 invalid 한 파일들은 무시합니다
+                        continue
+                    if ext != '.jpg':
                         continue
                     if self.downsample and file_name.startswith('mask'):
                         if not include_mask:
@@ -376,16 +399,17 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
         
         # # v1: normalized weights on target label (better than v0)
-        sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
-        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+        # sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
+        # return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
         
         # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
-        # age_weight = self.get_classweight_label(self.age_labels)
+        age_weight = self.get_classweight_label(self.age_labels)
         # age_weight = [age_weight[self.age_labels[idx]] for idx in self.indices['train']]
-        # gender_weight = self.get_classweight_label(self.gender_labels)
+        gender_weight = self.get_classweight_label(self.gender_labels)
         # gender_weight = [gender_weight[self.gender_labels[idx]] for idx in self.indices['train']]
+        weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
         # weights = .9*age_weight + .1*gender_weight
-        # return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+        return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
     def compute_class_weight(self) -> torch.tensor:
         """
