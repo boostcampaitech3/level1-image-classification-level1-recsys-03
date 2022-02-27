@@ -77,6 +77,7 @@ class EarlyStopping:
     def __init__(self, patience: int=5, min_delta: float=0.0, sign: int=-1):
         self.patience = patience
         self.min_delta = min_delta
+        self.sign = sign
         self.best = None
         self.counter = 0
         self.stop = False
