@@ -404,11 +404,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         
         # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
         age_weight = self.get_classweight_label(self.age_labels)
-        # age_weight = [age_weight[self.age_labels[idx]] for idx in self.indices['train']]
         gender_weight = self.get_classweight_label(self.gender_labels)
-        # gender_weight = [gender_weight[self.gender_labels[idx]] for idx in self.indices['train']]
         weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
-        # weights = .9*age_weight + .1*gender_weight
         return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
     def compute_class_weight(self) -> torch.tensor:
