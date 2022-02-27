@@ -168,6 +168,7 @@ def train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model) # implements data parallelism at the module level
 
     # -- loss & metric
+    f1_score = create_criterion('f1', **{'classes':dataset.num_classes})
     class_weight = dataset.compute_class_weight()
     criterion = create_criterion(args.criterion, **{'weight':class_weight})  # weighted_cross_entropy
     # criterion = create_criterion(args.criterion)  # default: cross_entropy
@@ -189,10 +190,11 @@ def train(data_dir, model_dir, args):
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
     
     # -- early stopping
-    early_stopping = EarlyStopping(patience=10, min_delta=0.0)
+    early_stopping = EarlyStopping(patience=30, min_delta=0.0)
 
     best_val_acc = 0
     best_val_loss = np.inf
+    best_val_f1 = 0
     for epoch in range(args.epochs):
         # train loop
         model.train()
@@ -242,6 +244,8 @@ def train(data_dir, model_dir, args):
             val_loss_items = []
             val_acc_items = []
             figure = None
+            out_lst = []
+            pred_lst = []
             for val_batch in val_loader:
                 inputs, labels = val_batch
                 inputs = inputs.to(device)
@@ -249,6 +253,8 @@ def train(data_dir, model_dir, args):
 
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
+                out_lst.append(outs)
+                pred_lst.append(preds)
 
                 loss_item = criterion(outs, labels).item() # .item(): 1d-tensor -> python primitives (memory efficient)
                 acc_item = (labels == preds).sum().item()
@@ -261,6 +267,11 @@ def train(data_dir, model_dir, args):
                     figure = grid_image(
                         inputs_np, labels, preds, n=16, shuffle=args.dataset != "MaskSplitByProfileDataset"
                     )
+            
+            out_lst = torch.cat(out_lst)
+            pred_lst = torch.cat(pred_lst)
+            f1 = f1_score(out_lst, pred_lst)
+            best_val_f1 = max(best_val_f1, f1)
 
             val_loss = np.sum(val_loss_items) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
@@ -277,14 +288,16 @@ def train(data_dir, model_dir, args):
                 best_val_acc = val_acc
             torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
             print(
-                f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
-                f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
+                f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2}, f1: {f1:4.2} || "
+                f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}, best f1: {best_val_f1:4.2}"
             )
+            logger.add_scalar("Val/f1", f1, epoch)
             logger.add_scalar("Val/loss", val_loss, epoch)
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
             wandb.log({
                 "Epoch": epoch, 
+                "Val/f1": f1,
                 "Val/loss": val_loss, 
                 "Val/accuracy": val_acc, 
                 "results": figure
