@@ -42,12 +42,12 @@ class BaseModel(nn.Module):
 # https://www.robots.ox.ac.uk/~albanie/models/pytorch-mcn/vgg_face_dag.pth
 ###########################################################################################
 class VGGFace(nn.Module):
-    def __init__(self, num_classes, dict_weight: OrderedDict=None, *args, **kwargs):
+    def __init__(self, num_classes, feature_extract: bool=False, dict_weight: OrderedDict=None, *args, **kwargs):
         super().__init__()
         self.model = models.vgg16()
         self.num_classes = num_classes
         self.dict_weight = dict_weight
-        self.feature_extract = True
+        self.feature_extract = feature_extract
         
         self.init_weights()
         # for param in self.model.parameters():

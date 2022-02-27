@@ -74,7 +74,7 @@ class EarlyStopping:
     patience (int): number of iterations that had no improvements
     min_delta (float): threshold improvement 
     """
-    def __init__(self, patience: int=5, min_delta: float=0.0):
+    def __init__(self, patience: int=5, min_delta: float=0.0, sign: int=-1):
         self.patience = patience
         self.min_delta = min_delta
         self.best = None
@@ -82,7 +82,7 @@ class EarlyStopping:
         self.stop = False
         
     def __call__(self, loss):
-        score = -loss
+        score = self.sign * loss
         
         if self.best is None:
             self.best = score

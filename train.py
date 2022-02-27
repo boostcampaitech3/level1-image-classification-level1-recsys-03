@@ -159,7 +159,8 @@ def train(data_dir, model_dir, args):
     )
 
     # -- model
-    model_param = parse_model_param(args.model_param, 'Pretrained' in args.model)
+    pretrained = args.model in ['VGGFace', 'PretrainedModels']
+    model_param = parse_model_param(args.model_param, pretrained)
     model_module = getattr(model_model, args.model)  # default: BaseModel
     model = model_module(
         num_classes=num_classes, 
@@ -190,7 +191,7 @@ def train(data_dir, model_dir, args):
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
     
     # -- early stopping
-    early_stopping = EarlyStopping(patience=30, min_delta=0.0)
+    early_stopping = EarlyStopping(patience=15, min_delta=0.0)
 
     best_val_acc = 0
     best_val_loss = np.inf

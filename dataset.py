@@ -28,7 +28,7 @@ class BaseAugmentation:
         self.transform = Compose([
             CenterCrop(320, 256, p=1.),
             Resize(resize[0], resize[1], Image.BILINEAR, p=1.),
-            Normalize(mean=mean, std=std, max_pixel_value=255., p=1.),
+            Normalize(mean=mean, std=std),
             ToTensorV2(p=1.),
         ], p=1.)
 
@@ -392,22 +392,22 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         used to prevent overfitting due to unbalanced dataset
         """
         # # v0: weights on target label
-        # train_index = self.indices['train'] # indices of train dataset
-        # train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
-        # class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
-        # weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
-        # samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
-        # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+        train_index = self.indices['train'] # indices of train dataset
+        train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
+        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
+        weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
+        samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
+        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
         
         # # v1: normalized weights on target label (better than v0)
         # sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
         # return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
         
         # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
-        age_weight = self.get_classweight_label(self.age_labels)
-        gender_weight = self.get_classweight_label(self.gender_labels)
-        weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
-        return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+        # age_weight = self.get_classweight_label(self.age_labels)
+        # gender_weight = self.get_classweight_label(self.gender_labels)
+        # weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
+        # return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
     def compute_class_weight(self) -> torch.tensor:
         """
@@ -430,7 +430,7 @@ class TestDataset(Dataset):
             Resize(resize[0], resize[1], Image.BILINEAR),
             Normalize(mean=mean, std=std),
             ToTensorV2(),
-        ])
+        ], p=1)
 
     def __getitem__(self, index):
         image = Image.open(self.img_paths[index])
