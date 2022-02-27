@@ -333,8 +333,9 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
                 include_mask = True
                 profile = profiles[_idx]
                 img_folder = os.path.join(self.data_dir, profile)
-                # for file_name in random.shuffle(os.listdir(img_folder)):
-                for file_name in os.listdir(img_folder):
+                lst_dir = os.listdir(img_folder)
+                random.shuffle(lst_dir)  # in-place operation (add randomness in selected images with mask label)
+                for file_name in lst_dir:
                     _file_name, ext = os.path.splitext(file_name)
                     if _file_name not in self._file_names:  # "." 로 시작하는 파일 및 invalid 한 파일들은 무시합니다
                         continue
