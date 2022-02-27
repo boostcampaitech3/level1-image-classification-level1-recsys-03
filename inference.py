@@ -65,7 +65,7 @@ def inference(data_dir, model_dir, output_dir, args):
     #     raise ValueError(f"Must pass either 1 or 3 models.. passed {len(model_dir)}")
     
     info['ans'] = preds
-    info.to_csv(os.path.join(output_dir, f'output.csv'), index=False)
+    info.to_csv(os.path.join(output_dir, args.output_filename), index=False)
     print(f'Inference Done!')
 
 
@@ -98,6 +98,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='BaseModel', help='model type (default: BaseModel)')
     parser.add_argument('--model_param', nargs='+', default='resnet false', help='model type (default: BaseModel)')
     parser.add_argument('--label', nargs='+', default='multi')
+    parser.add_argument('--output_filename', type=str, default='output.csv')
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_EVAL', '/opt/ml/input/data/eval'))
