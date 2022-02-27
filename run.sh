@@ -63,7 +63,7 @@
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation BaseAugmentation --model VGGFace --model_param false --optimizer SGD --name VGGFace_Ep60_patience15_SplitProf_Downsample_BaseAug_WeightedCEnSamplev0_SGD_AGE --label age
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation BaseAugmentation --model VGGFace --model_param false --optimizer SGD --name VGGFace_Ep60_patience15_SplitProf_Downsample_BaseAug_WeightedCEnSamplev0_SGD_GENDER --label gender
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation BaseAugmentation --model VGGFace --model_param false --optimizer SGD --name VGGFace_Ep60_patience15_SplitProf_Downsample_BaseAug_WeightedCEnSamplev0_SGD_MASK --label mask
-BaseAugmentation
+
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation BaseAugmentation --model VGGFace --model_param true --optimizer SGD --name VGGFace_Feature_Ep60_patience15_SplitProf_Downsample_BaseAug_WeightedCEnSamplev0_SGD_AGE --label age
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation BaseAugmentation --model VGGFace --model_param true --optimizer SGD --name VGGFace_Feature_Ep60_patience15_SplitProf_Downsample_BaseAug_WeightedCEnSamplev0_SGD_GENDER --label gender
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation BaseAugmentation --model VGGFace --model_param true --optimizer SGD --name VGGFace_Feature_Ep60_patience15_SplitProf_Downsample_BaseAug_WeightedCEnSamplev0_SGD_MASK --label mask
