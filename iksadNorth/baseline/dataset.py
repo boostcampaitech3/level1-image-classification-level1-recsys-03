@@ -1,3 +1,27 @@
+# %% [markdown]
+# dataset은 기본적으로 __init__, __len__, __getitem__이 있어야 하지만
+# 
+# 여기는 추가적으로 가져야 하는 것들이 있다.
+# 
+# ---
+# 
+# dataset
+# 
+# .mean
+# 
+# .std
+# 
+# .split_dataset
+# 
+# .set_transform
+# 
+# .num_classes
+# 
+# .image_paths
+# 
+# .mask_labels
+
+# %%
 import os
 import random
 from collections import defaultdict
@@ -8,10 +32,10 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset, Subset, random_split
-from torchvision import transforms
-from torchvision.transforms import *
-######################################################################################################
+from torchvision.transforms import Resize, ToTensor, Normalize, Compose, CenterCrop, ColorJitter
 
+import logging
+from util import see, logger
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
@@ -21,16 +45,21 @@ IMG_EXTENSIONS = [
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
-######################################################################################################
+
+
+
+# %%
 
 class BaseAugmentation:
+
     def __init__(self, resize, mean, std, **args):
-        self.transform = transforms.Compose([
+        self.transform = Compose([
             Resize(resize, Image.BILINEAR),
             ToTensor(),
             Normalize(mean=mean, std=std),
         ])
 
+ 
     def __call__(self, image):
         return self.transform(image)
 
@@ -47,14 +76,14 @@ class AddGaussianNoise(object):
 
     def __call__(self, tensor):
         return tensor + torch.randn(tensor.size()) * self.std + self.mean
-
+    
     def __repr__(self):
         return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
 
 
 class CustomAugmentation:
     def __init__(self, resize, mean, std, **args):
-        self.transform = transforms.Compose([
+        self.transform = Compose([
             CenterCrop((320, 256)),
             Resize(resize, Image.BILINEAR),
             ColorJitter(0.1, 0.1, 0.1, 0.1),
@@ -65,7 +94,26 @@ class CustomAugmentation:
 
     def __call__(self, image):
         return self.transform(image)
-######################################################################################################
+
+# https://discuss.pytorch.org/t/simple-way-to-inverse-transform-normalization/4821/3
+class UnNormalize(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, tensor):
+        """
+        Args:
+            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
+        Returns:
+            Tensor: Normalized image.
+        """
+        for t, m, s in zip(tensor, self.mean, self.std):
+            t.mul_(s).add_(m)
+            # The normalize code -> t.sub_(m).div_(s)
+        return tensor
+
+# %%
 
 class MaskLabels(int, Enum):
     MASK = 0
@@ -106,8 +154,11 @@ class AgeLabels(int, Enum):
             return cls.MIDDLE
         else:
             return cls.OLD
-######################################################################################################
 
+
+# %%
+
+# data_dir="'/opt/ml/input/data/train/images'"
 class MaskBaseDataset(Dataset):
     num_classes = 3 * 2 * 3
 
@@ -125,8 +176,9 @@ class MaskBaseDataset(Dataset):
     mask_labels = []
     gender_labels = []
     age_labels = []
-
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    
+    @see
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, **kwargs):
         self.data_dir = data_dir
         self.mean = mean
         self.std = std
@@ -136,18 +188,29 @@ class MaskBaseDataset(Dataset):
         self.setup()
         self.calc_statistics()
 
+    # data_dir="'/opt/ml/input/data/train/images'"
     def setup(self):
+        # 모든 images 폴더 아래의 경로 리스트로 취합
         profiles = os.listdir(self.data_dir)
+        logger.debug(f"train/images 아래 객체 갯수   :  {profiles.__len__()}")
+        # 아래의 경우 profile는 images 폴더 아래의 경로 문자열이 됨.
+        # profile = 'mask1.jpg'
         for profile in profiles:
             if profile.startswith("."):  # "." 로 시작하는 파일은 무시합니다
                 continue
 
             img_folder = os.path.join(self.data_dir, profile)
+            # img_folder: ex) /opt/ml/input/data/train/images/006927_male_Asian_19
+            # 다음은 위 경로 아래의 이미지 파일을 취합하는 과정.
             for file_name in os.listdir(img_folder):
+                # file_name: ex) normal.jpg
                 _file_name, ext = os.path.splitext(file_name)
+                # _file_name = normal
+                # ext = .jpg
                 if _file_name not in self._file_names:  # "." 로 시작하는 파일 및 invalid 한 파일들은 무시합니다
                     continue
-
+                
+                # img_path='/opt/ml/input/data/train/images/006927_male_Asian_19/normal.jpg'
                 img_path = os.path.join(self.data_dir, profile, file_name)  # (resized_data, 000004_male_Asian_54, mask1.jpg)
                 mask_label = self._file_names[_file_name]
 
@@ -174,6 +237,7 @@ class MaskBaseDataset(Dataset):
             self.mean = np.mean(sums, axis=0) / 255
             self.std = (np.mean(squared, axis=0) - self.mean ** 2) ** 0.5 / 255
 
+
     def set_transform(self, transform):
         self.transform = transform
 
@@ -192,15 +256,19 @@ class MaskBaseDataset(Dataset):
     def __len__(self):
         return len(self.image_paths)
 
+    @see
     def get_mask_label(self, index) -> MaskLabels:
         return self.mask_labels[index]
 
+    @see
     def get_gender_label(self, index) -> GenderLabels:
         return self.gender_labels[index]
 
+    @see
     def get_age_label(self, index) -> AgeLabels:
         return self.age_labels[index]
 
+    @see
     def read_image(self, index):
         image_path = self.image_paths[index]
         return Image.open(image_path)
@@ -245,17 +313,19 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         구현은 val_ratio 에 맞게 train / val 나누는 것을 이미지 전체가 아닌 사람(profile)에 대해서 진행하여 indexing 을 합니다
         이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
-
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    @see
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, **kwargs):
         self.indices = defaultdict(list)
-        super().__init__(data_dir, mean, std, val_ratio)
+        super().__init__(data_dir, mean, std, val_ratio, **kwargs)
 
+    # 이미지 폴더 당 비율 나눔.
+    # ex) 006927_male_Asian_19, 006927_female_Asian_64 이 단위로 나눔.
     @staticmethod
     def _split_profile(profiles, val_ratio):
         length = len(profiles)
         n_val = int(length * val_ratio)
 
-        val_indices = set(random.choices(range(length), k=n_val))
+        val_indices = set(random.sample(range(length), k=n_val))
         train_indices = set(range(length)) - val_indices
         return {
             "train": train_indices,
@@ -264,7 +334,9 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
 
     def setup(self):
         profiles = os.listdir(self.data_dir)
+        # 예를 들어 profiles = 'mask1.jpg'
         profiles = [profile for profile in profiles if not profile.startswith(".")]
+        # split_profiles = dict("train": train_indices, "val": val_indices)
         split_profiles = self._split_profile(profiles, self.val_ratio)
 
         cnt = 0
@@ -299,7 +371,7 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
 class TestDataset(Dataset):
     def __init__(self, img_paths, resize, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246)):
         self.img_paths = img_paths
-        self.transform = transforms.Compose([
+        self.transform = Compose([
             Resize(resize, Image.BILINEAR),
             ToTensor(),
             Normalize(mean=mean, std=std),
@@ -316,9 +388,10 @@ class TestDataset(Dataset):
         return len(self.img_paths)
 
 
-class UstageDataset(MaskSplitByProfileDataset):
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, label_type='age'):
-        super().__init__(data_dir, mean, std, val_ratio)
+# %%
+class GakGakDataset(MaskSplitByProfileDataset):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, label_type='age', **kwargs):
+        super().__init__(data_dir, mean, std, val_ratio, **kwargs)
         label_to_num = {'age':3, 'gender':2, 'mask':3}
         self.num_classes = label_to_num[label_type]
         self._label_type = label_type
@@ -332,9 +405,89 @@ class UstageDataset(MaskSplitByProfileDataset):
         image_transform = self.transform(image)
         return image_transform, label
 
-    def __len__(self):
-        return len(self.image_paths)
-    
     @property
     def label_type(self):
         return self.label_type
+
+# %%
+from util import folder, images_folder
+
+class UniformDataset(MaskSplitByProfileDataset):
+    def __init__(self, data_dir, **kwargs):
+        super(UniformDataset, self).__init__(data_dir, **kwargs)
+    
+    def setup(self):
+        # 균등한지 확인하기 위한 코드
+        # self.to_verify_uniformity = torch.zeros(3)
+        
+        imgfd = images_folder(self.data_dir)
+        profiles = imgfd.child
+        split_profiles = self._split_profile(profiles, self.val_ratio)
+
+        cnt = 0
+        for phase, indices in split_profiles.items():
+            for _idx in indices:
+                profile = profiles[_idx]
+                fd = folder(profile)
+                
+                gender, age = fd.label()
+                gender_label = GenderLabels.from_str(gender)
+                age_label = AgeLabels.from_number(age)
+                
+                for _file_name, img_path in fd.pick().items():
+                    # 균등한지 확인하기 위한 코드
+                    # if _file_name.startswith('mask'):
+                    #     self.to_verify_uniformity += torch.tensor([1,0,0])
+                    # elif _file_name.startswith('inc'):
+                    #     self.to_verify_uniformity += torch.tensor([0,1,0])
+                    # elif _file_name.startswith('nor'):
+                    #     self.to_verify_uniformity += torch.tensor([0,0,1])
+                    mask_label = self._file_names[_file_name]
+
+                    self.image_paths.append(img_path)
+                    self.mask_labels.append(mask_label)
+                    self.gender_labels.append(gender_label)
+                    self.age_labels.append(age_label)
+
+                    self.indices[phase].append(cnt)
+                    cnt += 1
+
+
+# %%
+class UniGakGakDataset(UniformDataset):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, label_type='age', **kwargs):
+        super().__init__(data_dir, **kwargs)
+        label_to_num = {'age':3, 'gender':2, 'mask':3}
+        self.num_classes = label_to_num[label_type]
+        self._label_type = label_type
+
+    def __getitem__(self, index):
+        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+
+        image = self.read_image(index)
+        label = getattr(self, f'get_{self._label_type}_label')(index)
+        
+        image_transform = self.transform(image)
+        return image_transform, label
+
+    @property
+    def label_type(self):
+        return self.label_type
+
+# %%
+if __name__ == '__main__':
+    # dataset = GakGakDataset('/opt/ml/input/data/train/images', label_type='age')
+    # dataset.set_transform(CustomAugmentation((384, 512), mean=1.0, std=1.0))
+    
+    # base = MaskBaseDataset('/opt/ml/input/data/train/images')
+    # base.set_transform(CustomAugmentation((384, 512), mean=1.0, std=1.0))
+    
+    uni = UniformDataset('/opt/ml/input/data/train/images')
+    uni.set_transform(CustomAugmentation((384, 512), mean=1.0, std=1.0))
+    
+    
+
+# %%
+
+
+
