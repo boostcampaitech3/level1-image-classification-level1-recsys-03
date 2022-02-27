@@ -262,7 +262,6 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         self.indices = defaultdict(list)
         self.label = label
         self.multi_labels = []
-        self.class_weights = self.compute_class_weight
         self.downsample = True
         
         super().__init__(data_dir, mean, std, val_ratio)
@@ -281,6 +280,7 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
             self.target_label = self.age_labels
         else:
             raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
+        self.class_weights = self.compute_class_weight()
 
     def __getitem__(self, index):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
@@ -376,7 +376,7 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
         
         # # v1: normalized weights on target label (better than v0)
-        sample_weight = [self.class_weight[self.target_label[idx]] for idx in self.indices['train']]
+        sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
         return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
         
         # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
