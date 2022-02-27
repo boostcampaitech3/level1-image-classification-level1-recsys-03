@@ -262,6 +262,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         self.indices = defaultdict(list)
         self.label = label
         self.multi_labels = []
+        self.class_weights = self.compute_class_weight
+        self.downsample = True
         
         super().__init__(data_dir, mean, std, val_ratio)
         
@@ -308,12 +310,17 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         cnt = 0
         for phase, indices in split_profiles.items():
             for _idx in indices:
+                include_mask = True
                 profile = profiles[_idx]
                 img_folder = os.path.join(self.data_dir, profile)
                 for file_name in os.listdir(img_folder):
                     _file_name, ext = os.path.splitext(file_name)
                     if _file_name not in self._file_names:  # "." 로 시작하는 파일 및 invalid 한 파일들은 무시합니다
                         continue
+                    if self.downsample and file_name.startswith('mask'):
+                        if not include_mask:
+                            continue
+                        include_mask = False # include only 1 mask image per profile
 
                     img_path = os.path.join(self.data_dir, profile, file_name)  # (resized_data, 000004_male_Asian_54, mask1.jpg)
                     mask_label = self._file_names[_file_name]
@@ -334,23 +341,51 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
     def split_dataset(self) -> List[Subset]:
         return [Subset(self, indices) for phase, indices in self.indices.items()]
     
-    def get_weighted_sampler(self) -> WeightedRandomSampler:
+    def get_train_labels(self, label):
+        """
+        returns train data of the input label
+        """
+        train_index = self.indices['train']
+        return [label[idx] for idx in train_index]
+    
+    def get_classweight_label(self, label) -> torch.tensor:
+        """
+        returns class weight of a label within train dataset
+        """
+        train_labels = self.get_train_labels(label)
+        _, n_samples = np.unique(train_labels, return_counts=True)
+        weights = 1. / torch.tensor(n_samples, dtype=torch.float)
+        return weights
+    
+    def normalize_weight(self, n_samples):
+        norm_weights = [1 - (sample / sum(n_samples)) for sample in n_samples]
+        return torch.tensor(norm_weights, dtype=torch.float)
+
+    ##################### need refactoring ##################### 
+    def get_weighted_sampler(self) -> WeightedRandomSampler:  
         """
         returns WeightedRandomSampler based on the distribution of the train label
         used to prevent overfitting due to unbalanced dataset
         """
-        # v0: weights
-        train_index = self.indices['train'] # indices of train dataset
-        train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
-        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
-        weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
-        samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
-        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
-        # v1: normalized weights
-        # train_index = self.indices['train']
-        # class_weight = self.compute_class_weight()
-        # sample_weight = [class_weight[self.target_label[idx]] for idx in train_index]
-        # return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+        # # v0: weights on target label
+        # train_index = self.indices['train'] # indices of train dataset
+        # train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
+        # class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
+        # weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
+        # samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
+        # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+        
+        # # v1: normalized weights on target label (better than v0)
+        sample_weight = [self.class_weight[self.target_label[idx]] for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+        
+        # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
+        # age_weight = self.get_classweight_label(self.age_labels)
+        # age_weight = [age_weight[self.age_labels[idx]] for idx in self.indices['train']]
+        # gender_weight = self.get_classweight_label(self.gender_labels)
+        # gender_weight = [gender_weight[self.gender_labels[idx]] for idx in self.indices['train']]
+        # weights = .9*age_weight + .1*gender_weight
+        # return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
     def compute_class_weight(self) -> torch.tensor:
         """
