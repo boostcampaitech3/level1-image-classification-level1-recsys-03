@@ -47,6 +47,7 @@ class VGGFace(nn.Module):
         self.model = models.vgg16()
         self.num_classes = num_classes
         self.dict_weight = dict_weight
+        self.feature_extract = True
         
         self.init_weights()
         # for param in self.model.parameters():
@@ -80,6 +81,7 @@ class VGGFace(nn.Module):
         vggface_weights = [(vgg_labels[idx], vggface_weights[idx][1]) for idx in range(len(vgg_labels))]
         
         self.model.load_state_dict(dict(vggface_weights), strict=False) # strict=False.. otherwise it raises Key Error
+        self.set_param_requires_grad
         self.model.classifier = nn.Sequential(
             nn.Linear(512*7*7, 4096),
             nn.ReLU(True),
@@ -88,6 +90,11 @@ class VGGFace(nn.Module):
             nn.Dropout(),
             nn.Linear(4096, self.num_classes)
         )
+        
+    def set_param_requires_grad(self):
+        if self.feature_extract:
+            for param in self.model.parameters():
+                param.requires_grad = False
 
 
 # Pretrained Models 
@@ -107,11 +114,15 @@ class PretrainedModels(nn.Module):
         return self.model(x)
 
     def init_model(self):
+        # import math
         if self.model_name == 'resnet':
             self.model = models.resnet18(pretrained=True)
             self.set_param_requires_grad()
             in_features = self.model.fc.in_features  # 512
             self.model.fc = torch.nn.Linear(in_features=in_features, out_features=self.num_classes)
+            # torch.nn.init.xavier_uniform_(self.model.fc.weight)
+            # stdv = 1. / math.sqrt(self.model.fc.weight.size(1))
+            # self.model.fc.bias.data.uniform_(-stdv, stdv)
             self.input_size = 224
         elif self.model_name == 'alexnet':
             self.model = models.alexnet(pretrained=True)
@@ -120,7 +131,7 @@ class PretrainedModels(nn.Module):
             self.model.classifier[6] = nn.Linear(in_features, self.num_classes)
             self.input_size = 224
         elif self.model_name == 'vgg':
-            self.model = models.vgg16(pretrained=True)
+            self.model = models.vgg19_bn(pretrained=True)
             self.set_param_requires_grad() # 4096
             in_features = self.model.classifier[6].in_features
             self.model.classifier[6] = nn.Linear(in_features, self.num_classes)
