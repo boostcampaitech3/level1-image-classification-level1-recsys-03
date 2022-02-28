@@ -158,7 +158,7 @@ class PretrainedModels(nn.Module):
             self.input_size = 299
         elif self.model_name == 'efficientnet-b3':
             from efficientnet_pytorch import EfficientNet
-            self.model = EfficientNet.from_pretrained('efficientnet-b3', num_classes=self.num_classes, device='cuda')
+            self.model = EfficientNet.from_pretrained('efficientnet-b3', num_classes=self.num_classes)
             self.input_size = 224
         else:
             raise ValueError(f'Expected alexnet, vgg, resnet, or inception, but received {self.model}..')
