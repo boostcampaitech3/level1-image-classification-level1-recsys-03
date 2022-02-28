@@ -438,6 +438,9 @@ class Subset(Dataset):
         np_img, label = self.dataset[self.indices[idx]]
         image_transform = self.transform(np_img)['image']
         return image_transform, label
+
+    def __len__(self):
+        return len(self.indices)
     
     def set_transform(self, transform):
         self.transform = transform
