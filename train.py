@@ -126,7 +126,7 @@ def train(data_dir, model_dir, args):
         mean=dataset.mean,
         std=dataset.std,
     )
-    train_set.dataset.set_transform(transform)
+    train_set.set_transform(transform)
     
     transform_module = getattr(import_module("dataset"), 'BaseAugmentation') 
     transform = transform_module(
@@ -134,7 +134,7 @@ def train(data_dir, model_dir, args):
         mean=dataset.mean,
         std=dataset.std,
     )
-    val_set.dataset.set_transform(transform)
+    val_set.set_transform(transform)
         
     # -- data_loader
     sampler = dataset.get_weighted_sampler() # WeightedRandomSampler
