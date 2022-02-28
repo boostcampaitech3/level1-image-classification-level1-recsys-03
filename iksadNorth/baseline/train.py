@@ -116,6 +116,7 @@ def train(data_dir, model_dir, args):
         label_type=args.label_type,
     )
     num_classes = dataset.num_classes  # 18
+    print("num_classes 갯수", dataset.num_classes)
     print("image 갯수", len(dataset.image_paths))
     print("mask_labels 갯수", len(dataset.mask_labels))
     
@@ -165,7 +166,6 @@ def train(data_dir, model_dir, args):
         model_module = getattr(import_module("model"), args.model)  # default: BaseModel
         model = model_module(
             num_classes=num_classes,
-            # saved_dir=args.saved_dir
             **kwargs
         )
     else:
@@ -324,6 +324,9 @@ def train(data_dir, model_dir, args):
             ########################################################
             if val_acc > best_val_acc:
                 print(f"New best model for val accuracy : {val_acc:4.2%}! saving the best model..")
+                # 모델 자체를 저장하도록 설정 #######################################################
+                torch.save(model, f"{save_dir}/best_model.pth")
+                ####################################################################################
                 torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
                 best_val_acc = val_acc
             torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
@@ -378,8 +381,20 @@ if __name__ == '__main__':
     # parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model/age'))
     parser.add_argument('--model_dir', type=str, default=f"/opt/ml/workspace/saved")
     
-
+    
     args = parser.parse_args()
+    kwargs = {}
+    
+    if args.saved_dir:
+        kwargs['saved_dir'] = args.saved_dir
+    if args.label_type:
+        kwargs['label_type'] = args.label_type
+    if args.saved_dir_model:
+        kwargs['saved_dir_model'] = args.saved_dir_model
+    if args.pre_trained_model:
+        kwargs['model_using'] = args.pre_trained_model[0]
+        kwargs['freeze'] = args.pre_trained_model[1]
+
 
     data_dir = args.data_dir
     model_dir = args.model_dir
