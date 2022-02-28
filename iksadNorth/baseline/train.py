@@ -150,11 +150,23 @@ def train(data_dir, model_dir, args):
     )
 
     # -- model
+    kwargs = {}
+    if args.saved_dir:
+        kwargs['saved_dir'] = args.saved_dir
+    if args.pre_trained_model:
+        kwargs['model_using'] = args.pre_trained_model[0]
+        kwargs['freeze'] = args.pre_trained_model[1]
+        del kwargs['saved_dir']
+        print(f'model_using :: {args.pre_trained_model[0]}')
+        print(f'is freeze?  :: {args.pre_trained_model[1]}')
+    
+    
     if not args.saved_dir_model:
         model_module = getattr(import_module("model"), args.model)  # default: BaseModel
         model = model_module(
             num_classes=num_classes,
-            saved_dir=args.saved_dir
+            # saved_dir=args.saved_dir
+            **kwargs
         )
     else:
         print(f"기존의 학습된 모델 사용 중...\n해당 모델 경로 :\t{args.saved_dir_model}")
@@ -359,7 +371,7 @@ if __name__ == '__main__':
     parser.add_argument('--label_type', type=str, default=None, help='dataset에서 사용하고 싶은 label. "age", "gender", "mask" 중 택1')
     parser.add_argument('--saved_dir', type=str, default='./model', help='/opt/ml/workspace/baseline/model')
     parser.add_argument('--saved_dir_model', type=str, default=None, help='학습시킨 모델을 다시 로드함. 해당 경로는 사용하고 싶은 모델의 .pth를 정확히 기술해야 함.')
-    
+    parser.add_argument('--pre_trained_model', nargs='*', default=None, help='torchvision.model에 존재하는 model과 freeze 여부.')
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/train/images'))
