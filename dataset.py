@@ -64,8 +64,8 @@ class CustomAugmentation:
             ShiftScaleRotate(shift_limit=0.05, rotate_limit=20, p=.7),
             RandomBrightnessContrast(p=.7),
             OneOf([
-                FancyPCA(p=1.),
-                GaussNoise(p=.5),
+                FancyPCA(p=.5),
+                GaussNoise(p=.2),
             ], p=1.),
             Normalize(mean=mean, std=std),
             ToTensorV2(p=1.0),
@@ -233,6 +233,9 @@ class MaskBaseDataset(Dataset):
         return self.age_labels[index]
 
     def read_image(self, index):
+        """
+        read an image from directory and return it as a numpy array
+        """
         image_path = self.image_paths[index]
         return np.array(Image.open(image_path))
 
@@ -301,14 +304,9 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         else:
             raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
         self.class_weights = self.compute_class_weight()
-
+    
     def __getitem__(self, index):
-        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
-
-        image_np = self.read_image(index)
-        # image_np = np.array(image)
-        image_transform = self.transform(image_np)['image']
-        return image_transform, int(self.target_label[index])
+        return self.read_image(index), self.target_label[index]
 
     @staticmethod
     def _split_profile(profiles, val_ratio):
@@ -392,12 +390,12 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         used to prevent overfitting due to unbalanced dataset
         """
         # # v0: weights on target label
-        train_index = self.indices['train'] # indices of train dataset
-        train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
-        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
-        weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
-        samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
-        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+        # train_index = self.indices['train'] # indices of train dataset
+        # train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
+        # class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
+        # weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
+        # samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
+        # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
         
         # # v1: normalized weights on target label (better than v0)
         # sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
@@ -408,6 +406,12 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         # gender_weight = self.get_classweight_label(self.gender_labels)
         # weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
         # return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+
+        # v3: normalized weights on multi label
+        multi_weight = self.get_classweight_label(self.multi_labels)
+        multi_weight = self.normalize_weight(multi_weight)
+        sample_weight = [multi_weight[self.multi_labels[idx]] for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
 
     def compute_class_weight(self) -> torch.tensor:
         """
@@ -420,6 +424,23 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         _, n_samples = np.unique(train_labels, return_counts=True)
         norm_weights = [1 - (sample / sum(n_samples)) for sample in n_samples]
         return torch.tensor(norm_weights, dtype=torch.float).to(device='cuda')
+
+
+class Subset(Dataset):
+    def __init__(self, dataset, indices):
+        self.dataset = dataset
+        self.indices = indices
+        self.transform = None
+    
+    def __getitem__(self, idx):
+        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+        
+        np_img, label = self.dataset[self.indices[idx]]
+        image_transform = self.transform(np_img)['image']
+        return image_transform, label
+    
+    def set_transform(self, transform):
+        self.transform = transform
 
 
 class TestDataset(Dataset):
