@@ -384,34 +384,44 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         return torch.tensor(norm_weights, dtype=torch.float)
 
     ##################### need refactoring ##################### 
-    def get_weighted_sampler(self) -> WeightedRandomSampler:  
-        """
-        returns WeightedRandomSampler based on the distribution of the train label
-        used to prevent overfitting due to unbalanced dataset
-        """
-        # # v0: weights on target label
-        # train_index = self.indices['train'] # indices of train dataset
-        # train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
-        # class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
-        # weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
-        # samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
-        # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
-        
-        # # v1: normalized weights on target label (better than v0)
-        # sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
-        # return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
-        
-        # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
-        # age_weight = self.get_classweight_label(self.age_labels)
-        # gender_weight = self.get_classweight_label(self.gender_labels)
-        # weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
-        # return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+    def weight0(self):
+        # v0: weights on target label
+        train_index = self.indices['train'] # indices of train dataset
+        train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
+        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
+        weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
+        samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
+        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+    
+    def weight1(self):
+        # v1: normalized weights on target label (better than v0)
+        sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
 
+    def weight2(self):
+        # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
+        age_weight = self.get_classweight_label(self.age_labels)
+        gender_weight = self.get_classweight_label(self.gender_labels)
+        weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+
+    def weight3(self):
         # v3: normalized weights on multi label
         multi_weight = self.get_classweight_label(self.multi_labels)
         multi_weight = self.normalize_weight(multi_weight)
         sample_weight = [multi_weight[self.multi_labels[idx]] for idx in self.indices['train']]
         return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+    
+    def get_weighted_sampler(self, ver: int=0) -> WeightedRandomSampler:  
+        """
+        returns WeightedRandomSampler based on the distribution of the train label
+        used to prevent overfitting due to unbalanced dataset
+        """
+        if ver==0: return self.weight0()
+        elif ver==1: return self.weight1()
+        elif ver==2: return self.weight2()
+        elif ver==3: return self.weight3()
+        else: raise ValueError(f'invalid version of {ver}')
 
     def compute_class_weight(self) -> torch.tensor:
         """

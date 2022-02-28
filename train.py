@@ -89,7 +89,7 @@ def increment_path(path, exist_ok=False):
 def parse_model_param(params:str, pretrained: bool) -> dict:
     model_param = {}
     if pretrained:
-        model_names = ['resnet', 'alexnet', 'vgg', 'squeezenet', 'densenet', 'inception']
+        model_names = ['resnet', 'alexnet', 'vgg', 'squeezenet', 'densenet', 'inception', 'efficientnet-b3']
         for param in params:
             if param.lower() in model_names:
                 model_param['model_name'] = param.lower()
@@ -137,7 +137,7 @@ def train(data_dir, model_dir, args):
     val_set.set_transform(transform)
         
     # -- data_loader
-    sampler = dataset.get_weighted_sampler() # WeightedRandomSampler
+    sampler = dataset.get_weighted_sampler(args.weight_version) # WeightedRandomSampler
 
     train_loader = DataLoader(
         train_set,
@@ -332,6 +332,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_interval', type=int, default=20, help='how many batches to wait before logging training status')
     parser.add_argument('--name', default='exp', help='model save at {SM_MODEL_DIR}/{name}')
     parser.add_argument('--label', type=str, default='multi', help='label of the data (default: multi)')
+    parser.add_argument('--weight_version', type=int, default='0', help='implementation version of WegightedRandomSample (default: 0)')
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/train/images'))

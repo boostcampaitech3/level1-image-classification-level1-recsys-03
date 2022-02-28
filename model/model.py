@@ -148,7 +148,7 @@ class PretrainedModels(nn.Module):
             num_ftrs = self.model.classifier.in_features
             self.model.classifier = nn.Linear(num_ftrs, self.num_classes) 
             self.input_size = 224
-        elif self.model_name == 'inception':
+        elif self.model_name == 'inception': #### NEED TO FIX ####
             self.model = models.inception_v3(pretrained=True)
             self.set_param_requires_grad() 
             num_ftrs = self.model.AuxLogits.fc.in_features # 768, Handle the auxilary net
@@ -156,6 +156,10 @@ class PretrainedModels(nn.Module):
             num_ftrs = self.model.fc.in_features # Handle the primary net
             self.model.fc = nn.Linear(num_ftrs,self.num_classes)
             self.input_size = 299
+        elif self.model_name == 'efficientnet-b3':
+            from efficientnet_pytorch import EfficientNet
+            self.model = EfficientNet.from_pretrained('efficientnet-b3', num_classes=self.num_classes, device='cuda')
+            self.input_size = 224
         else:
             raise ValueError(f'Expected alexnet, vgg, resnet, or inception, but received {self.model}..')
 
