@@ -1,0 +1,3 @@
+# python inference.py --model PretrainedModels --model_param resnet false --label age gender mask --output_filename output_focal.csv --model_dir ./model/age/age_focal ./model/gender/gender_focal ./model/mask/mask_focal
+
+python inference.py --model PretrainedModels --model_param resnet false --label age gender mask --output_filename output_label_smoothing.csv --model_dir ./model/age/age_label_smoothing ./model/gender/gender_label_smoothing ./model/mask/mask_label_smoothing --batch_size=250
