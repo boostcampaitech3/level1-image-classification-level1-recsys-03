@@ -116,7 +116,7 @@ class PretrainedModels(nn.Module):
     def init_model(self):
         # import math
         if self.model_name == 'resnet':
-            self.model = models.resnet18(pretrained=True)
+            self.model = models.resnet50(pretrained=True)
             self.set_param_requires_grad()
             in_features = self.model.fc.in_features  # 512
             self.model.fc = torch.nn.Linear(in_features=in_features, out_features=self.num_classes)
