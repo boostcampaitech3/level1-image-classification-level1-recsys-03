@@ -82,13 +82,13 @@
 # python inference.py --model VGGFace --model_param false --label age gender mask --output_filename output-VGGFace_Ep60_Weightv3_AGM-20220301-ijkimmmy.csv --model_dir ./model/age/VGGFace_Ep60_Weightv3_AGE ./model/gender/VGGFace_Ep60_Weightv3_GENDER ./model/mask/VGGFace_Ep60_Weightv3_MASK
 
 # efficientnet try1
-python train.py --epochs 60 --model PretrainedModels --model_param efficientnet-b3 false --optimizer SGD --name Effb3_Ep60_Weightv3_AGE --label age
-python train.py --epochs 60 --model PretrainedModels --model_param efficientnet-b3 false --optimizer SGD --name Effb3_Ep60_Weightv3_GENDER --label gender
-python train.py --epochs 60 --model PretrainedModels --model_param efficientnet-b3 false --optimizer SGD --name Effb3_Ep60_Weightv3_MASK --label mask
-
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 1 --name VGGFace_Ep60_Weightv1_AGE --label age
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 1 --name VGGFace_Ep60_Weightv1_GENDER --label gender
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 1 --name VGGFace_Ep60_Weightv1_MASK --label mask
+
+python train.py --epochs 60 --model PretrainedModels --model_param efficientnet-b3 false --optimizer SGD --name Effb3_Ep60_Weightv0_AGE --label age
+python train.py --epochs 60 --model PretrainedModels --model_param efficientnet-b3 false --optimizer SGD --name Effb3_Ep60_Weightv0_GENDER --label gender
+python train.py --epochs 60 --model PretrainedModels --model_param efficientnet-b3 false --optimizer SGD --name Effb3_Ep60_Weightv0_MASK --label mask
 
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 2 --name VGGFace_Ep60_Weightv2_AGE --label age
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 2 --name VGGFace_Ep60_Weightv2_GENDER --label gender
@@ -97,3 +97,19 @@ python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation C
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 0 --name VGGFace_Ep60_Weightv0_AGE --label age
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 0 --name VGGFace_Ep60_Weightv0_GENDER --label gender
 python train.py --epochs 60 --dataset MaskSplitByProfileDataset --augmentation CustomAugmentation --model VGGFace --model_param false --optimizer SGD --weight_version 0 --name VGGFace_Ep60_Weightv0_MASK --label mask
+
+python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --name Vgg_Ep60_Weightv3_AGE --label age
+python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --name Vgg_Ep60_Weightv3_GENDER --label gender
+python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --name Vgg_Ep60_Weightv3_MASK --label mask
+
+python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --weight_version 4 --name Vgg_Ep60_Weightv4_AGE --label age
+python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --weight_version 3 --name Vgg_Ep60_Weightv3_AGE --label age
+python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --weight_version 2 --name Vgg_Ep60_Weightv2_AGE --label age
+python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --weight_version 1 --name Vgg_Ep60_Weightv1_AGE --label age
+
+# python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --weight_version 4 --name Vgg_Ep60_Weightv4_GENDER --label gender
+# python train.py --epochs 60 --model PretrainedModels --model_param vgg false --optimizer SGD --weight_version 4 --name Vgg_Ep60_Weightv4_MASK --label mask
+
+python train.py --epochs 60 --model VGGFace --model_param true --optimizer SGD --weight_version 3 --name VGGFace_Feature_Ep60_Weightv3_AGE --label age
+python train.py --epochs 60 --model VGGFace --model_param true --optimizer SGD --weight_version 3 --name VGGFace_Feature_Ep60_Weightv3_GENDER --label gender
+python train.py --epochs 60 --model VGGFace --model_param true --optimizer SGD --weight_version 3 --name VGGFace_Feature_Ep60_Weightv3_MASK --label mask
