@@ -243,7 +243,7 @@ def train(data_dir, model_dir, args):
                     train_acc = matches / args.batch_size / args.log_interval
                     current_lr = get_lr(optimizer)
                     print(
-                        f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
+                        f"Fold[{fold_idx}]Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
                         f"training loss {train_loss:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
                     )
                     logger.add_scalar("Train/loss", train_loss, epoch * len(train_loader) + idx)
@@ -293,7 +293,7 @@ def train(data_dir, model_dir, args):
                 out_lst = torch.cat(out_lst)
                 pred_lst = torch.cat(pred_lst)
                 val_f1 = f1_score(out_lst, pred_lst)
-                best_val_f1 = max(best_val_f1, val_f1)
+                # best_val_f1 = max(best_val_f1, val_f1)
 
                 val_loss = np.sum(val_loss_items) / len(val_loader)
                 # val_acc = np.sum(val_acc_items) / len(val_set)
@@ -307,11 +307,11 @@ def train(data_dir, model_dir, args):
                 if val_f1 < best_val_f1:
                     print(f"New best model for val f1 : {val_f1:4.2%}! saving the best model..")
                     torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
-                    best_val_acc = val_f1
+                    best_val_f1 = val_f1
                 torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
                 print(
-                    f"[Val] f1 : {val_f1:4.2%}, loss: {val_loss:4.2} || "
-                    f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}, best f1: {best_val_f1:4.2}"
+                    f"[Val] f1 : {val_f1:4.2}, loss: {val_loss:4.2} || "
+                    f"best f1 : {best_val_f1:4.2}, best loss: {best_val_loss:4.2}"
                 )
                 logger.add_scalar("Val/f1", val_f1, epoch)
                 logger.add_scalar("Val/loss", val_loss, epoch)
