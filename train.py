@@ -296,21 +296,21 @@ def train(data_dir, model_dir, args):
                 out_lst = torch.cat(out_lst)
                 pred_lst = torch.cat(pred_lst)
                 val_f1 = f1_score(out_lst, pred_lst)
-                # best_val_f1 = max(best_val_f1, val_f1)
+                best_val_f1 = max(best_val_f1, val_f1)
 
                 val_loss = np.sum(val_loss_items) / len(val_loader)
                 # val_acc = np.sum(val_acc_items) / len(val_set)
-                best_val_loss = min(best_val_loss, val_loss)
+                # best_val_loss = min(best_val_loss, val_loss)
                 
-                early_stopping(val_f1)
+                early_stopping(val_loss)
                 if early_stopping.stop:
                     print("Early Stopping")
                     break
                 
-                if val_f1 < best_val_f1:
-                    print(f"New best model for val f1 : {val_f1:4.2%}! saving the best model..")
+                if val_loss < best_val_loss:
+                    print(f"New best model for val loss : {val_loss:4.2%}! saving the best model..")
                     torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
-                    best_val_f1 = val_f1
+                    best_val_loss = val_loss
                 torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
                 print(
                     f"[Val] f1 : {val_f1:4.2f}, loss: {val_loss:4.2f} || "
