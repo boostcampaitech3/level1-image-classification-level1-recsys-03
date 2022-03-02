@@ -217,6 +217,9 @@ def train(data_dir, model_dir, args):
     best_val_loss = np.inf
     best_val_f1 = 0
     for epoch in range(args.epochs):
+        if early_stopping.stop: # break outer loop as well
+            break
+        
         # train loop
         model.train()
         loss_value = 0
@@ -310,8 +313,8 @@ def train(data_dir, model_dir, args):
                     best_val_f1 = val_f1
                 torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
                 print(
-                    f"[Val] f1 : {val_f1:4.2}, loss: {val_loss:4.2} || "
-                    f"best f1 : {best_val_f1:4.2}, best loss: {best_val_loss:4.2}"
+                    f"[Val] f1 : {val_f1:4.2f}, loss: {val_loss:4.2f} || "
+                    f"best f1 : {best_val_f1:4.2f}, best loss: {best_val_loss:4.2f}"
                 )
                 logger.add_scalar("Val/f1", val_f1, epoch)
                 logger.add_scalar("Val/loss", val_loss, epoch)
