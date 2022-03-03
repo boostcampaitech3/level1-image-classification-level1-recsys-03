@@ -1,17 +1,18 @@
 import os
 import random
-from collections import defaultdict
 from enum import Enum
 from typing import Tuple, List
 
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import Dataset, Subset, random_split, WeightedRandomSampler
+from torch.utils.data import Dataset, Subset, WeightedRandomSampler
 # from torchvision import transforms
 # from torchvision.transforms import *
 from albumentations import *
 from albumentations.pytorch import ToTensorV2
+from sklearn.model_selection import StratifiedKFold
+
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
@@ -155,87 +156,114 @@ class MaskBaseDataset(Dataset):
     }
     
     image_paths = []
+    profiles = []
 
     # 각 카테고리에 대한 이미지의 클래스 리스트
-    mask_labels, gender_labels, age_labels = [], [], []
+    mask_labels, gender_labels, age_labels, multi_labels = [], [], [], []
 
     def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         self.data_dir = data_dir
         self.mean, self.std = mean, std
-        self.val_ratio = val_ratio
+        # self.val_ratio = val_ratio
+        self.downsample = True
         
-        self.transform = None
+        # self.transform = None
         self.setup()
-        self.calc_statistics()
+        # self.calc_statistics()
 
+    
+    def __getitem__(self, index):
+        # assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+
+        # mask_label = self.get_mask_label(index)
+        # gender_label = self.get_gender_label(index)
+        # age_label = self.get_age_label(index)
+        # multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
+
+        # image = self.read_image(index)
+        # image_np = np.array(image)
+        # image_transform = self.transform(image_np)['image']
+        # return image_transform, multi_class_label
+
+        return self.read_image(index), self.multi_labels[index]
+
+
+    def __len__(self):
+        return len(self.image_paths)
+
+
+    
     ## 이미지 절대경로, 마스크 착용상태, 성별, 나이대를 멤버변수로 설정
     def setup(self):
         # ["000001_female_Asian_45","000002_female_Asian_52",...]
-        profiles = os.listdir(self.data_dir) # 지정한 디렉토리("/opt/ml/input/data/train/images") 내 모든 파일과 디렉토리의 리스트 
+        # profiles = os.listdir(self.data_dir) # 지정한 디렉토리("/opt/ml/input/data/train/images") 내 모든 파일과 디렉토리의 리스트 
         
+        self.profiles = [profile for profile in os.listdir(self.data_dir) if not profile.startswith('.')]
+
         # 한 사람씩 진행
-        for profile in profiles:
-            if profile.startswith("."):  # "." 로 시작하는 디렉토리 무시
-                continue
+        for profile in self.profiles:
+            # if profile.startswith("."):  # "." 로 시작하는 디렉토리 무시
+            #     continue
+
+            _, gender, _, age = profile.split("_")
+            gender_label = GenderLabels.from_str(gender)
+            age_label = AgeLabels.from_number(age)
+            
+            include_mask = True
+
 
             # /opt/ml/input/data/train/images/000001_female_Asian_45
             img_folder = os.path.join(self.data_dir, profile)
             
+            lst_files = os.listdir(img_folder)
+            random.shuffle(lst_files)
+
             # 특정 사람의 각 마스크 상태에 대해 반복
-            for file_name in os.listdir(img_folder):  # ['incorrect_mask.jpg', 'mask1.jpg',...,'normal.jpg']
+            for file_name in lst_files:  # ['incorrect_mask.jpg', 'mask1.jpg',...,'normal.jpg']
                 _file_name, ext = os.path.splitext(file_name)   # ('incorrect_mask', '.jpg')
                 if _file_name not in self._file_names:  # "." 로 시작하는 파일(임시파일) 및 invalid 한 파일들은 무시
                     continue
+
+                if self.downsample and file_name.startswith('mask'):
+                    if not include_mask:
+                        continue
+                    include_mask = False
+
 
                  # /opt/ml/input/data/train/images/000001_female_Asian_45/incorrect_mask.jpg
                 img_path = os.path.join(self.data_dir, profile, file_name)  # 특정 한 장에 대한 절대경로
                 mask_label = self._file_names[_file_name]  # mask:0, incorrect:1, normal:2
 
-                _, gender, _, age = profile.split("_")  # 000001, female, Asian, 45
-                gender_label = GenderLabels.from_str(gender)  # male:0, female:1
-                age_label = AgeLabels.from_number(age)  # 30세 미만:0, 60세 미만:1, 60세 이상:2
+                # _, gender, _, age = profile.split("_")  # 000001, female, Asian, 45
+                # gender_label = GenderLabels.from_str(gender)  # male:0, female:1
+                # age_label = AgeLabels.from_number(age)  # 30세 미만:0, 60세 미만:1, 60세 이상:2
 
                 self.image_paths.append(img_path)  # "opt/ml/input/data/train/images/000001_female_Asian_45/incorrect_mask.jpg"
                 self.mask_labels.append(mask_label)  # 1
                 self.gender_labels.append(gender_label)  # 1
                 self.age_labels.append(age_label)  # 1
+                self.multi_labels.append(self.encode_multi_class(mask_label, gender_label, age_label))
 
 
-    def calc_statistics(self):
-        has_statistics = self.mean is not None and self.std is not None  # self.mean, self.std 값 있는지 여부 체크
-        if not has_statistics:  # self.mean, self.std 값이 없다면 직접 계산
-            print("[Warning] Calculating statistics... It can take a long time depending on your CPU machine")
-            sums = []
-            squared = []
-            for image_path in self.image_paths[:3000]:  # 각 사진의 절대경로들. 앞의 3000장에 대해서만 계산 진행
-                image = np.array(Image.open(image_path)).astype(np.int32)  # 각 이미지를 PIL → np.array로 형변환
-                sums.append(image.mean(axis=(0, 1)))
-                squared.append((image ** 2).mean(axis=(0, 1)))
+    # def calc_statistics(self):
+    #     has_statistics = self.mean is not None and self.std is not None  # self.mean, self.std 값 있는지 여부 체크
+    #     if not has_statistics:  # self.mean, self.std 값이 없다면 직접 계산
+    #         print("[Warning] Calculating statistics... It can take a long time depending on your CPU machine")
+    #         sums = []
+    #         squared = []
+    #         for image_path in self.image_paths[:3000]:  # 각 사진의 절대경로들. 앞의 3000장에 대해서만 계산 진행
+    #             image = np.array(Image.open(image_path)).astype(np.int32)  # 각 이미지를 PIL → np.array로 형변환
+    #             sums.append(image.mean(axis=(0, 1)))
+    #             squared.append((image ** 2).mean(axis=(0, 1)))
 
-            self.mean = np.mean(sums, axis=0) / 255  # 255로 나누는 이유? normalize!! (0 ~ 1 사이의 값으로 나오도록)
-            self.std = (np.mean(squared, axis=0) - self.mean ** 2) ** 0.5 / 255
-            # print(self.mean, self.std)
-
-
-    def set_transform(self, transform):
-        self.transform = transform
+    #         self.mean = np.mean(sums, axis=0) / 255  # 255로 나누는 이유? normalize!! (0 ~ 1 사이의 값으로 나오도록)
+    #         self.std = (np.mean(squared, axis=0) - self.mean ** 2) ** 0.5 / 255
+    #         # print(self.mean, self.std)
 
 
-    def __getitem__(self, index):
-        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+    # def set_transform(self, transform):
+    #     self.transform = transform
 
-        mask_label = self.get_mask_label(index)
-        gender_label = self.get_gender_label(index)
-        age_label = self.get_age_label(index)
-        multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
-
-        image = self.read_image(index)
-        image_np = np.array(image)
-        image_transform = self.transform(image_np)['image']
-        return image_transform, multi_class_label
-
-    def __len__(self):
-        return len(self.image_paths)
 
     def get_mask_label(self, index) -> MaskLabels:
         return self.mask_labels[index]
@@ -245,10 +273,6 @@ class MaskBaseDataset(Dataset):
 
     def get_age_label(self, index) -> AgeLabels:
         return self.age_labels[index]
-
-    def read_image(self, index):
-        image_path = self.image_paths[index]
-        return np.array(Image.open(image_path))
 
     @staticmethod
     def encode_multi_class(mask_label, gender_label, age_label) -> int:
@@ -270,17 +294,22 @@ class MaskBaseDataset(Dataset):
         img_cp = np.clip(img_cp, 0, 255).astype(np.uint8)
         return img_cp
 
-    def split_dataset(self) -> Tuple[Subset, Subset]:
-        """
-        데이터셋을 train 과 val 로 나눕니다,
-        pytorch 내부의 torch.utils.data.random_split 함수를 사용하여
-        torch.utils.data.Subset 클래스 둘로 나눕니다.
-        구현이 어렵지 않으니 구글링 혹은 IDE (e.g. pycharm) 의 navigation 기능을 통해 코드를 한 번 읽어보는 것을 추천드립니다^^
-        """
-        n_val = int(len(self) * self.val_ratio)
-        n_train = len(self) - n_val
-        train_set, val_set = random_split(self, [n_train, n_val])
-        return train_set, val_set
+    def read_image(self, index):
+        image_path = self.image_paths[index]
+        return np.array(Image.open(image_path))
+
+
+    # def split_dataset(self) -> Tuple[Subset, Subset]:
+    #     """
+    #     데이터셋을 train 과 val 로 나눕니다,
+    #     pytorch 내부의 torch.utils.data.random_split 함수를 사용하여
+    #     torch.utils.data.Subset 클래스 둘로 나눕니다.
+    #     구현이 어렵지 않으니 구글링 혹은 IDE (e.g. pycharm) 의 navigation 기능을 통해 코드를 한 번 읽어보는 것을 추천드립니다^^
+    #     """
+    #     n_val = int(len(self) * self.val_ratio)
+    #     n_train = len(self) - n_val
+    #     train_set, val_set = random_split(self, [n_train, n_val])
+    #     return train_set, val_set
 
 
 ## 꼭 이걸로 돌려야 한다!!
@@ -292,16 +321,29 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
     
-    def __init__(self, data_dir, label='multi', mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
-        self.indices = defaultdict(list)  # value의 datatype이 list...!!
-        
-        self.label = label  # 분류기를 하나만 사용할지, 여러개를 사용할지의 tag (multi vs. mask vs. gender vs. age)
-        self.multi_labels = []  # 분류기를 하나(multi)만 사용하는 경우의 각 이미지 클래스 리스트
-        self.downsample = True  # down-sampling할지의 여부
+    def __init__(self, data_dir, label='multi', n_fold:int=2, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+        # self.indices = defaultdict(list)  # value의 datatype이 list...!!
         
         # 실질적으로 해당 클래스에서 override한 setup() 메소드 호출
-        super().__init__(data_dir, mean, std, val_ratio)
+        super().__init__(data_dir, mean, std)
+
+
+        self.label = label  # 분류기를 하나만 사용할지, 여러개를 사용할지의 tag (multi vs. mask vs. gender vs. age)
+        # self.multi_labels = []  # 분류기를 하나(multi)만 사용하는 경우의 각 이미지 클래스 리스트
+        # self.downsample = True  # down-sampling할지의 여부
         
+        self.target_label = []
+        self.set_target_label()
+
+        self.n_fold = n_fold
+        self.kfold_indices = []
+        self.stratified_kfold()
+        self.indices = self.kfold_indices[0]
+        
+        self.class_weights = self.compute_class_weight()
+    
+
+    def set_target_label(self):
         if self.label == 'multi':
             self.num_classes = 3 * 2 * 3
             self.target_label = self.multi_labels  # setup()에서 세팅한 결과가 넣어진다.
@@ -316,81 +358,7 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
             self.target_label = self.age_labels
         else:
             raise ValueError(f"label must be 'multi', 'mask', 'gender', or 'age', {self.label}")
-        self.class_weights = self.compute_class_weight()
-    
 
-    ## 특정 사람은 train으로, 나머지 사람은 validation으로 나누도록 한다.
-    ## return value : profiles의 index가 될 것들
-    @staticmethod
-    def _split_profile(profiles, val_ratio):
-        """
-        args:
-            profiles = ["000001_female_Asian_45","000002_female_Asian_52",...]
-            val_ratio = 0.2
-        """
-
-        length = len(profiles)  # 인원 수 (2700명)
-        n_val = int(length * val_ratio)  # validation 인원 수 (540명)
-        # 전체 인원 2700명 중 random으로 540명 추출 (중복된 인원은 제외) → 540명보단 적을 수도 있다.
-        val_indices = set(random.sample(range(length), k=n_val))
-        train_indices = set(range(length)) - val_indices
-        return {
-            "train": train_indices,
-            "val": val_indices
-        }
-
-
-    def setup(self):
-        # ["000001_female_Asian_45","000002_female_Asian_52",...]
-        profiles = os.listdir(self.data_dir)  # /opt/ml/input/data/train/images 내 모든 파일과 디렉토리의 리스트
-        profiles = [profile for profile in profiles if not profile.startswith(".")]  # "."으로 시작하는 디렉토리만 빼고 넣는다.
-        split_profiles = self._split_profile(profiles, self.val_ratio)  # {"train":{3,8,346,496,1695,...},"val":{1,5,94,2500,...}}
-
-        cnt = 0
-        for phase, indices in split_profiles.items():  # [("train",{3,8,346,496,1695,...}),("val",{1,5,94,2500,...})]
-            for _idx in indices:  
-                include_mask = True  # 마스크 정상착용한 사진인지의 여부를 표시하는 flag
-
-                profile = profiles[_idx]  # val(train)으로 지정된 특정한 한 사람 (e.g. 000002_female_Asian_52)
-                img_folder = os.path.join(self.data_dir, profile)  # /opt/ml/input/data/train/images/000002_female_Asian_52 (사람 폴더경로)
-                
-                lst_dir = os.listdir(img_folder)  # ['incorrect_mask.jpg', 'mask1.jpg',...,'normal.jpg']
-                random.shuffle(lst_dir)   # 사진들을 섞는다. (mask1, mask2, mask3, mask4, mask5 중에서 임의로 한 개를 뽑기 위함.)
-                
-                for file_name in lst_dir:
-                    _file_name, ext = os.path.splitext(file_name)  # ("mask1",".jpg")
-                    if _file_name not in self._file_names:  # "." 로 시작하는 파일(임시파일) 및 invalid 한 파일들은 무시
-                        continue
-
-                    if ext != '.jpg':  # jpg 확장자 아닌 사진들도 무시
-                        continue
-
-                    # mask 정상 착용한 사진이 incorrect, normal보다 5배 많으므로 down-sampling 진행
-                    # 즉, 사람당 마스크 정상착용 사진을 1장씩으로 줄인다.
-                    if self.downsample and file_name.startswith('mask'):
-                        if not include_mask:  # 이미 마스크 정상착용 사진 한 장을 포함시킨 경우
-                            continue
-
-                        include_mask = False   # 이후에 오게되는 마스크 정상착용 사진은 받아들이면 안 된다.
-
-                    img_path = os.path.join(self.data_dir, profile, file_name)  # 특정 한 장에 대한 절대경로
-                    mask_label = self._file_names[_file_name]  # mask:0, incorrect:1, normal:2
-                    _, gender, _, age = profile.split("_")  # 000002, female, Asian, 52
-                    gender_label = GenderLabels.from_str(gender)  # male:0, female:1
-                    age_label = AgeLabels.from_number(age)  # 30세 미만:0, 60세 미만:1, 60세 이상:2
-
-                    self.image_paths.append(img_path)  # "~/input/data/train/images/000002_female_Asian_52/incorrect_mask.jpg"
-                    self.mask_labels.append(mask_label)  # 1
-                    self.gender_labels.append(gender_label)  # 1
-                    self.age_labels.append(age_label)  # 1
-                    self.multi_labels.append(self.encode_multi_class(mask_label, gender_label, age_label))  # 14
-
-                    self.indices[phase].append(cnt)  # {"train":[0,4,8,245,..], "val":[3,884,...]} (사진 기준으로 indexing된다.)
-                    cnt += 1
-
-    def split_dataset(self) -> List[Subset]:
-        return [Subset(self, indices) for phase, indices in self.indices.items()]
-    
 
     def __getitem__(self, index):
         """
@@ -401,13 +369,43 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         return self.read_image(index), self.target_label[index]
 
 
+    def stratified_kfold(self):
+        profile_labels = []
+        for profile in self.profiles:
+            _, gender, _, age = profile.split("_")
+            gender_label = GenderLabels.from_str(gender)
+            age_label = AgeLabels.from_number(age)
+            profile_label = self.encode_multi_class(0, gender_label, age_label)
+            profile_labels.append(profile_label)
+        
+        skf = StratifiedKFold(n_splits=self.n_fold)
+        for train_profiles, val_profiles in skf.split(self.profiles, profile_labels):
+            train_index, val_index = [], []
+            for profile_idx in train_profiles:
+                train_index.extend(range(profile_idx*3, profile_idx*3+3))
+            for profile_idx in val_profiles:
+                val_index.extend(range(profile_idx*3, profile_idx*3+3))
+            self.kfold_indices.append({
+                'train': train_index,
+                'val': val_index
+            })
+
+    def set_indices(self, idx:int=0):
+        # set train/val indices of specified kfold indices
+        self.indices = self.kfold_indices[idx]
+
+
+    def split_dataset(self) -> List[Subset]:
+        return [Subset(self, indices) for phase, indices in self.indices.items()]
+
+
     def get_train_labels(self, label):
         """
         train으로 split된 사진들의 label값을 return한다.
         """
         train_index = self.indices['train']  # {"train":[0,4,8,245,..], "val":[3,884,...]} (사진 기준으로 indexing된다.)
         return [label[idx] for idx in train_index]
-    
+
 
     # normalize되지 않은 weight 할당
     def get_classweight_label(self, label) -> torch.tensor:
@@ -429,36 +427,52 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
 
 
     ##################### need refactoring ##################### 
-    def get_weighted_sampler(self) -> WeightedRandomSampler:
+    def weight0(self):
+        # v0: weights on target label
+        train_index = self.indices['train'] # indices of train dataset
+        train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
+        class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
+        weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
+        samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
+        return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+    
+    def weight1(self):
+        # v1: normalized weights on target label (better than v0)
+        sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+
+    def weight2(self):
+        # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
+        age_weight = self.get_classweight_label(self.age_labels)
+        gender_weight = self.get_classweight_label(self.gender_labels)
+        weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+
+    def weight3(self):
+        # v3: normalized weights on multi label
+        multi_weight = self.get_classweight_label(self.multi_labels)
+        multi_weight = self.normalize_weight(multi_weight)
+        sample_weight = [multi_weight[self.multi_labels[idx]] for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+
+    def weight4(self):
+        # v4: weights on multi label
+        multi_weight = self.get_classweight_label(self.multi_labels)
+        sample_weight = [multi_weight[self.multi_labels[idx]] for idx in self.indices['train']]
+        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+
+
+    def get_weighted_sampler(self, ver: int=0) -> WeightedRandomSampler:  
         """
         returns WeightedRandomSampler based on the distribution of the train label
         used to prevent overfitting due to unbalanced dataset
         """
-        # # v0: weights on target label
-        # train_index = self.indices['train'] # indices of train dataset
-        # train_labels = [self.target_label[idx] for idx in train_index] # target_label of train dataset
-        # class_counts = np.array([len(np.where(train_labels==t)[0]) for t in np.unique(train_labels)]) # get counts of each class 
-        # weights = 1. / torch.tensor(class_counts, dtype=torch.float) # get weights (more class count == less weight(frequent) it will be sampled)
-        # samples_weights = weights[train_labels] # map weights for each train dataset, len(samples_weights) == len(train dataset)
-        # return WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
-        
-        # # v1: normalized weights on target label (better than v0)
-        # sample_weight = [self.class_weights[self.target_label[idx]] for idx in self.indices['train']]
-        # return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
-        
-        # # v2: normalized weights on of specific ratio ``age=.9 : gender=.1``
-        # age_weight = self.get_classweight_label(self.age_labels)
-        # gender_weight = self.get_classweight_label(self.gender_labels)
-        # weights = [age_weight[self.age_labels[idx]]*.9 + gender_weight[self.gender_labels[idx]]*.1 for idx in self.indices['train']]
-        # return WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
-
-        # v3: normalized weights on multi label
-        multi_weight = self.get_classweight_label(self.multi_labels)
-        multi_weight = self.normalize_weight(multi_weight)
-        # train image의 각 index에 대해 multi label값을 가져와 이에 대응되는 weight를 append시킨다.
-        # e.g.) train image index:[3,6,79,185,..] → label:[1,1,14,8,...] → weight:[1/4, 1/4, 1/72, 1/16,...]
-        sample_weight = [multi_weight[self.multi_labels[idx]] for idx in self.indices['train']]
-        return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
+        if ver==0: return self.weight0()
+        elif ver==1: return self.weight1()
+        elif ver==2: return self.weight2()
+        elif ver==3: return self.weight3()
+        elif ver==4: return self.weight4()
+        else: raise ValueError(f'invalid version of {ver}')
 
 
     # 각 label 개수에 반비례하는 정규화된 weight 할당
@@ -473,6 +487,8 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         _, n_samples = np.unique(train_labels, return_counts=True)
         norm_weights = [1 - (sample / sum(n_samples)) for sample in n_samples]
         return torch.tensor(norm_weights, dtype=torch.float).to(device='cuda')
+    
+    
 
 
 class Subset(Dataset):
@@ -516,3 +532,5 @@ class TestDataset(Dataset):
     def __len__(self):
         return len(self.img_paths)
     
+
+   
