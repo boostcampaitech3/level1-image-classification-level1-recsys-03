@@ -89,7 +89,7 @@ def increment_path(path, exist_ok=False):
 def parse_model_param(params:str, pretrained: bool) -> dict:
     model_param = {}
     if pretrained:
-        model_names = ['resnet', 'alexnet', 'vgg', 'squeezenet', 'densenet', 'inception', 'efficientnet-b3']
+        model_names = ['resnet18', 'resnet50', 'alexnet', 'vgg', 'squeezenet', 'densenet', 'inception', 'efficientnet-b3']
         for param in params:
             if param.lower() in model_names:
                 model_param['model_name'] = param.lower()
@@ -307,6 +307,7 @@ def train(data_dir, model_dir, args):
                     print("Early Stopping")
                     break
                 
+                # if val_f1 > best_val_f1:
                 if val_loss < best_val_loss:
                     print(f"New best model for val loss : {val_loss:4.2%}! saving the best model..")
                     torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
