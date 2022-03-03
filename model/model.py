@@ -81,7 +81,7 @@ class VGGFace(nn.Module):
         vggface_weights = [(vgg_labels[idx], vggface_weights[idx][1]) for idx in range(len(vgg_labels))]
         
         self.model.load_state_dict(dict(vggface_weights), strict=False) # strict=False.. otherwise it raises Key Error
-        self.set_param_requires_grad
+        self.set_param_requires_grad()
         self.model.classifier = nn.Sequential(
             nn.Linear(512*7*7, 4096),
             nn.ReLU(True),
@@ -100,7 +100,7 @@ class VGGFace(nn.Module):
 # Pretrained Models 
 # https://tutorials.pytorch.kr/beginner/finetuning_torchvision_models_tutorial.html
 class PretrainedModels(nn.Module):
-    def __init__(self, num_classes, model_name: str='resnet', feature_extract: bool=False, **kwargs):
+    def __init__(self, num_classes, model_name: str='resnet18', feature_extract: bool=False, **kwargs):
         super().__init__()
         self.num_classes = num_classes
         self.model_name = model_name
@@ -115,14 +115,20 @@ class PretrainedModels(nn.Module):
 
     def init_model(self):
         # import math
-        if self.model_name == 'resnet':
-            self.model = models.resnet50(pretrained=True)
+        if self.model_name == 'resnet18':
+            self.model = models.resnet18(pretrained=True)
             self.set_param_requires_grad()
             in_features = self.model.fc.in_features  # 512
             self.model.fc = torch.nn.Linear(in_features=in_features, out_features=self.num_classes)
             # torch.nn.init.xavier_uniform_(self.model.fc.weight)
             # stdv = 1. / math.sqrt(self.model.fc.weight.size(1))
             # self.model.fc.bias.data.uniform_(-stdv, stdv)
+            self.input_size = 224
+        elif self.model_name == 'resnet50':
+            self.model = models.resnet50(pretrained=True)
+            self.set_param_requires_grad()
+            in_features = self.model.fc.in_features 
+            self.model.fc = torch.nn.Linear(in_features=in_features, out_features=self.num_classes)
             self.input_size = 224
         elif self.model_name == 'alexnet':
             self.model = models.alexnet(pretrained=True)
@@ -161,7 +167,7 @@ class PretrainedModels(nn.Module):
             self.model = EfficientNet.from_pretrained('efficientnet-b3', num_classes=self.num_classes)
             self.input_size = 224
         else:
-            raise ValueError(f'Expected alexnet, vgg, resnet, or inception, but received {self.model}..')
+            raise ValueError(f'Expected alexnet, vgg, resnet, or inception, but received {self.model_name}..')
 
     def set_param_requires_grad(self):
         if self.feature_extract:
