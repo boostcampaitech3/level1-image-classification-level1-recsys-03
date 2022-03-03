@@ -1,9 +1,3 @@
-# %%
-import wandb
-
-wandb.init(project="P_stage_img_classification", entity="boostcampe_recsys_03")
-
-# %%
 import argparse
 import glob
 import json
@@ -14,20 +8,19 @@ import re
 from importlib import import_module
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import matplotlib.pyplot as plt
+import wandb
 
+import model.model as model_model
 from dataset import MaskBaseDataset
-from loss import create_criterion
+from model.loss import create_criterion
+from utils.util import EarlyStopping
 
-from util import EarlyStop, FishingKit
-kit = FishingKit('print_time_backward')
-
-# %%
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -77,7 +70,6 @@ def grid_image(np_images, gts, preds, n=16, shuffle=False):
 
 def increment_path(path, exist_ok=False):
     """ Automatically increment path, i.e. runs/exp --> runs/exp0, runs/exp1 etc.
-
     Args:
         path (str or pathlib.Path): f"{model_dir}/{args.name}".
         exist_ok (bool): whether increment path (increment if False).
@@ -93,92 +85,114 @@ def increment_path(path, exist_ok=False):
         return f"{path}{n}"
 
 
+def parse_model_param(params:str, pretrained: bool) -> dict:
+    model_param = {}
+    if pretrained:
+        model_names = ['resnet', 'alexnet', 'vgg', 'squeezenet', 'densenet', 'inception', 'efficientnet-b3']
+        for param in params:
+            if param.lower() in model_names:
+                model_param['model_name'] = param.lower()
+            if param.lower() == 'true':
+                model_param['feature_extract'] = True
+            elif param.lower() == 'false':
+                model_param['feature_extract'] = False
+    return model_param
 
-# %%
+
+def get_dataloder(dataset, train_trfm, val_trfm, args):
+    """_summary_
+    enumerate through fold indices, split dataset into train and validation set, init transform for each
+    returns list of (train_dataloader, valid_dataloader)
+    Args:
+        dataset (MaskSplitByProfileDataset)
+            : dataset containing stratified kfold information with regards to the profile of the image
+        train_trfm
+            : train transform
+        val_trfm
+            : validation transform
+        args
+            : arguments passed in
+    """
+    assert dataset.n_fold == args.k_folds
+
+    dataloaders = []    
+    for index in range(args.k_folds):
+        dataset.set_indices(index)
+        train_set, val_set = dataset.split_dataset()
+        train_set.set_transform(train_trfm)
+        val_set.set_transform(val_trfm)
+        sampler = dataset.get_weighted_sampler(args.weight_version) # WeightedRandomSampler
+        train_loader = DataLoader(
+            train_set,
+            batch_size=args.batch_size,
+            num_workers=multiprocessing.cpu_count()//2,
+            # shuffle=True,
+            pin_memory=torch.cuda.is_available(),
+            drop_last=True,
+            sampler=sampler,
+        )
+        val_loader = DataLoader(
+            val_set,
+            batch_size=args.valid_batch_size,
+            num_workers=multiprocessing.cpu_count()//2,
+            shuffle=False,
+            pin_memory=torch.cuda.is_available(),
+            drop_last=True,
+        )
+        dataloaders.append((train_loader, val_loader))
+    return dataloaders
+
 
 def train(data_dir, model_dir, args):
     seed_everything(args.seed)
 
-    if args.label_type:
-        save_dir = increment_path(os.path.join(model_dir, args.name, args.label_type))
-    else:
-        save_dir = increment_path(os.path.join(model_dir, args.name))
+    save_dir = increment_path(os.path.join(model_dir, args.name))
 
     # -- settings
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
     # -- dataset
-    dataset_module = getattr(import_module("dataset"), args.dataset)  # default: MaskBaseDataset
+    dataset_module = getattr(import_module("dataset"), args.dataset)  # default: MaskSplitByProfileDataset
     dataset = dataset_module(
         data_dir=data_dir,
-        # label_type=args.name,
-        label_type=args.label_type,
+        label=args.label,
+        n_fold=args.k_folds,
     )
     num_classes = dataset.num_classes  # 18
-    print("num_classes 갯수", dataset.num_classes)
-    print("image 갯수", len(dataset.image_paths))
-    print("mask_labels 갯수", len(dataset.mask_labels))
-    
-    # -- augmentation
-    transform_module = getattr(import_module("dataset"), args.augmentation)  # default: BaseAugmentation
-    transform = transform_module(
+
+    # -- augmentation & dataloader
+    train_trfm_module = getattr(import_module("dataset"), args.augmentation)  
+    train_trfm = train_trfm_module(
         resize=args.resize,
         mean=dataset.mean,
         std=dataset.std,
     )
-    dataset.set_transform(transform)
-
-    # -- data_loader
-    train_set, val_set = dataset.split_dataset()
-
-    train_loader = DataLoader(
-        train_set,
-        batch_size=args.batch_size,
-        num_workers=multiprocessing.cpu_count()//2,
-        shuffle=True,
-        pin_memory=use_cuda,
-        drop_last=True,
+    val_trfm_module = getattr(import_module("dataset"), 'BaseAugmentation') 
+    val_trfm = val_trfm_module(
+        resize=args.resize,
+        mean=dataset.mean,
+        std=dataset.std,
     )
-    print("val_set =====================", len(val_set))
-    val_loader = DataLoader(
-        val_set,
-        batch_size=args.valid_batch_size,
-        num_workers=multiprocessing.cpu_count()//2,
-        shuffle=False,
-        pin_memory=use_cuda,
-        drop_last=True,
-    )
+    
+    dataloaders = get_dataloder(dataset, train_trfm, val_trfm, args)
 
     # -- model
-    kwargs = {}
-    if args.saved_dir:
-        kwargs['saved_dir'] = args.saved_dir
-    if args.pre_trained_model:
-        kwargs['model_using'] = args.pre_trained_model[0]
-        kwargs['freeze'] = args.pre_trained_model[1]
-        del kwargs['saved_dir']
-        print(f'model_using :: {args.pre_trained_model[0]}')
-        print(f'is freeze?  :: {args.pre_trained_model[1]}')
-    
-    
-    if not args.saved_dir_model:
-        model_module = getattr(import_module("model"), args.model)  # default: BaseModel
-        model = model_module(
-            num_classes=num_classes,
-            **kwargs
-        )
-    else:
-        print(f"기존의 학습된 모델 사용 중...\n해당 모델 경로 :\t{args.saved_dir_model}")
-        model = torch.load(args.saved_dir_model)
-    model = model.to(device)
-    model = torch.nn.DataParallel(model)
-    # hook을 이용한 각 모델마다의 시간 ############################
-    # model = model.apply(kit.hook().attach)
-    #############################################################
-    
+    pretrained = args.model in ['VGGFace', 'PretrainedModels']
+    model_param = parse_model_param(args.model_param, pretrained)
+    model_module = getattr(model_model, args.model)  # default: BaseModel
+    model = model_module(
+        num_classes=num_classes, 
+        **model_param
+    ).to(device)
+    model = torch.nn.DataParallel(model) # implements data parallelism at the module level
+
     # -- loss & metric
-    criterion = create_criterion(args.criterion)  # default: cross_entropy
+    f1_score = create_criterion('f1', **{'classes':dataset.num_classes})
+    class_weight = dataset.compute_class_weight()
+    
+    criterion = create_criterion(args.criterion, **{'weight':class_weight})  # weighted_cross_entropy
+    # criterion = create_criterion(args.criterion)  # default: cross_entropy
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -186,165 +200,170 @@ def train(data_dir, model_dir, args):
         weight_decay=5e-4
     )
     scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
+    
+    from cosine_annealing_warmup import CosineAnnealingWarmupRestarts
+    scheduler = CosineAnnealingWarmupRestarts(optimizer,
+                                          first_cycle_steps=200,
+                                          cycle_mult=1.0,
+                                          max_lr=0.1,
+                                          min_lr=0.001,
+                                          warmup_steps=50,
+                                          gamma=0.5)
 
     # -- logging
-    logger = SummaryWriter(log_dir=save_dir)
-    # w&b 사용하는 곳 #############################
-    wandb.config = {
-    "epoch":args.epochs,
-    "dataset": args.dataset,
-    "augmentation": args.augmentation,
-    "resize": args.resize,
-    "batch_size": args.batch_size,
-    "valid_batch_size": args.valid_batch_size,
-    "model": args.model,
-    "optimizer": args.optimizer,
-    "lr": args.lr,
-    "val_ratio": args.val_ratio,
-    "criterion": args.criterion,
-    "lr_decay_step": args.lr_decay_step,
-    "name": args.name,
-    "label_type": args.label_type,
-    "The number of images of dataset":dataset.image_paths,
-    "ratio of mask imgs in dataset":dataset.mask_labels.__len__() / dataset.image_paths.__len__(),
-    "mean of dataset":dataset.mean,
-    "std of dataset":dataset.std,
-    "num of classes":dataset.num_classes,
-    "is_using_cuda": use_cuda,
-    "multiprocessing.cpu_count()":multiprocessing.cpu_count()
-    }
-
-    # Optional
-    # wandb.watch(model)
-    ###############################################
+    # wandb.init(project="bc-ai-lv1-img-classification", entity="ijkimmy", sync_tensorboard=True) # wandb init must go before SummaryWriter
+    wandb.init(project="new_wandb", entity="boostcampe_recsys_03") # wandb init must go before SummaryWriter
+    wandb.run.name = args.name
+    wandb.config.update(args) # update all of the arguments as config variables
+    
+    logger = SummaryWriter(log_dir=save_dir) #  tensorboard
     with open(os.path.join(save_dir, 'config.json'), 'w', encoding='utf-8') as f:
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
+    
+    # -- early stopping
+    early_stopping = EarlyStopping(patience=15, min_delta=0.0)
 
     best_val_acc = 0
     best_val_loss = np.inf
-    break_flag = False
+    best_val_f1 = 0
     for epoch in range(args.epochs):
         # train loop
+        if early_stopping.stop: break
         model.train()
         loss_value = 0
         matches = 0
-        for idx, train_batch in enumerate(train_loader):
-            inputs, labels = train_batch
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-
-            # Train ######################################
-            optimizer.zero_grad()
-
-            outs = model(inputs)
-            preds = torch.argmax(outs, dim=-1)
-            loss = criterion(outs, labels)
-
-            loss.backward()
-            optimizer.step()
-            ##############################################
-
-            loss_value += loss.item()
-            matches += (preds == labels).sum().item()
-            if (idx + 1) % args.log_interval == 0:
-                train_loss = loss_value / args.log_interval
-                train_acc = matches / args.batch_size / args.log_interval
-                current_lr = get_lr(optimizer)
-                print(
-                    f"Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
-                    f"training loss {train_loss:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
-                )
-                # logger.add_scalar("Train/loss", train_loss, epoch * len(train_loader) + idx)
-                # logger.add_scalar("Train/accuracy", train_acc, epoch * len(train_loader) + idx)
-                wandb.log({
-                "Train/loss": train_loss,
-                "Train/accuracy": train_acc,
-                })
-
-                loss_value = 0
-                matches = 0
-            # w&b 사용하는 곳 #############################
-            wandb.log({
-                "loss": loss,
-                'train_images':wandb.Image(inputs),
-                'train_labels':labels
-                })
-
-            # Optional
-            # wandb.watch(model)
-            ###############################################
-
-        scheduler.step()
-
-        # val loop
-        with torch.no_grad():
-            print("Calculating validation results...")
-            model.eval()
-            val_loss_items = []
-            val_acc_items = []
-            # early-stop ###########################################
-            early_stop = EarlyStop(rtol=1e-4,length=10)
-            ########################################################
-            # figure = None
-            for val_batch in val_loader:
-                inputs, labels = val_batch
+        for fold_idx, (train_loader, val_loader) in enumerate(dataloaders):
+            # for idx, train_batch in enumerate(train_loader):
+            for idx, (inputs, labels) in enumerate(train_loader):
+                
+                # inputs, labels = train_batch
                 inputs = inputs.to(device)
                 labels = labels.to(device)
-                
+
+                optimizer.zero_grad()
+
                 outs = model(inputs)
                 preds = torch.argmax(outs, dim=-1)
+                loss = criterion(outs, labels)
 
-                loss_item = criterion(outs, labels).item()
-                acc_item = (labels == preds).sum().item()
-                val_loss_items.append(loss_item)
-                val_acc_items.append(acc_item)
+                loss.backward()
+                optimizer.step()
 
-                # if figure is None:
-                #     inputs_np = torch.clone(inputs).detach().cpu().permute(0, 2, 3, 1).numpy()
-                #     inputs_np = dataset_module.denormalize_image(inputs_np, dataset.mean, dataset.std)
-                #     figure = grid_image(
-                #         inputs_np, labels, preds, n=16, shuffle=args.dataset != "MaskSplitByProfileDataset"
-                #     )
+                loss_value += loss.item()
+                matches += (preds == labels).sum().item()
+                if (idx + 1) % args.log_interval == 0:
+                    train_loss = loss_value / args.log_interval
+                    train_acc = matches / args.batch_size / args.log_interval
+                    train_acc = matches / len(labels) / args.log_interval
+                    current_lr = get_lr(optimizer)
+                    print(
+                        f"Fold[{fold_idx}] Epoch[{epoch}/{args.epochs}]({idx + 1}/{len(train_loader)}) || "
+                        f"training loss {train_loss:4.4} || training accuracy {train_acc:4.2%} || lr {current_lr}"
+                    )
+                    logger.add_scalar("Train/loss", train_loss, epoch * len(train_loader) + idx)
+                    logger.add_scalar("Train/accuracy", train_acc, epoch * len(train_loader) + idx)
+                    wandb.log({
+                        "Epoch": epoch * len(train_loader) + idx,
+                        "Train/loss": train_loss, 
+                        "Train/accuracy": train_acc
+                    })
 
-            val_loss = np.sum(val_loss_items) / len(val_loader)
-            val_acc = np.sum(val_acc_items) / len(val_set)
-            best_val_loss = min(best_val_loss, val_loss)
-            # w&b 사용하는 곳 #############################
-            wandb.log({
-                "Val/loss": val_loss,
-                "Val/accuracy": val_acc
-                })
+                    loss_value = 0
+                    matches = 0
 
-            # Optional
-            # wandb.watch(model)
-            ###############################################
-            # early-stop ###########################################
-            if early_stop.append(val_acc):
-                break_flag=True
-            ########################################################
-            if val_acc > best_val_acc:
-                print(f"New best model for val accuracy : {val_acc:4.2%}! saving the best model..")
-                # 모델 자체를 저장하도록 설정 #######################################################
-                torch.save(model, f"{save_dir}/best_model.pth")
-                ####################################################################################
-                torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
-                best_val_acc = val_acc
-            torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
-            print(
-                f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
-                f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
-            )
-            # logger.add_scalar("Val/loss", val_loss, epoch)
-            # logger.add_scalar("Val/accuracy", val_acc, epoch)
-            # logger.add_figure("results", figure, epoch)
-            print()
-            
-        if break_flag:
-            break
-            
+            scheduler.step()
 
+            # val loop
+            with torch.no_grad():
+                print("Calculating validation results...")
+                model.eval()
+                val_loss_items = []
+                val_acc_items = []
+                figure = None
+                out_lst = []
+                pred_lst = []
+                for val_batch in val_loader:
+                    inputs, labels = val_batch
+                    inputs = inputs.to(device)
+                    labels = labels.to(device)
 
-# %%
+                    outs = model(inputs)
+                    preds = torch.argmax(outs, dim=-1)
+                    out_lst.append(outs.cpu().data)
+                    pred_lst.append(preds.cpu())
+
+                    loss_item = criterion(outs, labels).item() # .item(): 1d-tensor -> python primitives (memory efficient)
+                    acc_item = (labels == preds).sum().item()
+                    val_loss_items.append(loss_item)
+                    val_acc_items.append(acc_item)
+
+                    if figure is None:
+                        inputs_np = torch.clone(inputs).detach().cpu().permute(0, 2, 3, 1).numpy()
+                        inputs_np = dataset_module.denormalize_image(inputs_np, dataset.mean, dataset.std)
+                        figure = grid_image(
+                            inputs_np, labels, preds, n=16, shuffle=args.dataset != "MaskSplitByProfileDataset"
+                        )
+                
+                out_lst = torch.cat(out_lst)
+                pred_lst = torch.cat(pred_lst)
+                val_f1 = f1_score(out_lst, pred_lst)
+                best_val_f1 = max(best_val_f1, val_f1)
+
+                val_loss = np.sum(val_loss_items) / len(val_loader)
+                # val_acc = np.sum(val_acc_items) / len(val_set)
+                # best_val_loss = min(best_val_loss, val_loss)
+                
+                early_stopping(val_loss)
+                if early_stopping.stop:
+                    print("Early Stopping")
+                    break
+                
+                if val_loss < best_val_loss:
+                    print(f"New best model for val loss : {val_loss:4.2}! saving the best model..")
+                    torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
+                    best_val_loss = val_loss
+                torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
+                print(
+                    f"[Val] f1 : {val_f1:4.2f}, loss: {val_loss:4.2f} || "
+                    f"best f1 : {best_val_f1:4.2f}, best loss: {best_val_loss:4.2f}"
+                )
+                
+                # out_lst = torch.cat(out_lst)
+                # pred_lst = torch.cat(pred_lst)
+                # val_f1 = f1_score(out_lst, pred_lst)
+                # # best_val_f1 = max(best_val_f1, val_f1)
+
+                # val_loss = np.sum(val_loss_items) / len(val_loader)
+                # # val_acc = np.sum(val_acc_items) / len(val_set)
+                # best_val_loss = min(best_val_loss, val_loss)
+                
+                # early_stopping(val_f1)
+                # if early_stopping.stop:
+                #     print("Early Stopping")
+                #     break
+                
+                # if val_f1 < best_val_f1:
+                #     print(f"New best model for val f1 : {val_f1:4.2%}! saving the best model..")
+                #     torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
+                #     best_val_f1 = val_f1
+                # torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
+                # print(
+                #     f"[Val] f1 : {val_f1:4.2f}, loss: {val_loss:4.2f} || "
+                #     f"best f1 : {best_val_f1:4.2f}, best loss: {best_val_loss:4.2f}"
+                # )
+                logger.add_scalar("Val/f1", val_f1, epoch)
+                logger.add_scalar("Val/loss", val_loss, epoch)
+                # logger.add_scalar("Val/accuracy", val_acc, epoch)
+                logger.add_figure("results", figure, epoch)
+                wandb.log({
+                    "Epoch": epoch, 
+                    "Val/f1": val_f1,
+                    "Val/loss": val_loss, 
+                    # "Val/accuracy": val_acc, 
+                    "results": figure
+                    })
+                print()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -355,84 +374,33 @@ if __name__ == '__main__':
 
     # Data and model checkpoints directories
     parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')
-    parser.add_argument('--epochs', type=int, default=50, help='number of epochs to train (default: 1)')
-    parser.add_argument('--dataset', type=str, default='GakGakDataset', help='dataset augmentation type (default: MaskBaseDataset)')
-    parser.add_argument('--augmentation', type=str, default='BaseAugmentation', help='data augmentation type (default: BaseAugmentation)')
-    parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
-    parser.add_argument('--batch_size', type=int, default=10, help='input batch size for training (default: 64)')
-    parser.add_argument('--valid_batch_size', type=int, default=50, help='input batch size for validing (default: 1000)')
-    parser.add_argument('--model', type=str, default='ResNetModel', help='model type (default: BaseModel)')
-    parser.add_argument('--optimizer', type=str, default='SGD', help='optimizer type (default: Adam)')
+    parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train (default: 1)')
+    parser.add_argument('--dataset', type=str, default='MaskSplitByProfileDataset', help='dataset augmentation type (default: MaskSplitByProfileDataset)')
+    parser.add_argument('--augmentation', type=str, default='CustomAugmentation', help='data augmentation type (default: BaseAugmentation)')
+    parser.add_argument("--resize", nargs="+", type=list, default=[224, 224], help='resize size for image when training')
+    parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
+    parser.add_argument('--valid_batch_size', type=int, default=200, help='input batch size for validing (default: 1000)')
+    parser.add_argument('--k_folds', type=int, default=5, help='number of splits using k-fold (default: 5)')
+    parser.add_argument('--model', type=str, default='BaseModel', help='model type (default: BaseModel)')
+    parser.add_argument('--model_param', nargs='+', default='resnet false', help='model parameter (default: ResNet False)')
+    parser.add_argument('--optimizer', type=str, default='SGD', help='optimizer type (default: SGD)')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
     parser.add_argument('--val_ratio', type=float, default=0.2, help='ratio for validaton (default: 0.2)')
     parser.add_argument('--criterion', type=str, default='cross_entropy', help='criterion type (default: cross_entropy)')
     parser.add_argument('--lr_decay_step', type=int, default=20, help='learning rate scheduler deacy step (default: 20)')
     parser.add_argument('--log_interval', type=int, default=20, help='how many batches to wait before logging training status')
-    parser.add_argument('--name', default='GakGak_BaseAug_ResNetModel_SGD', help='model save at {SM_MODEL_DIR}/{name} (default: exp)')
-    
-    # 추가한 것들.
-    parser.add_argument('--label_type', type=str, default=None, help='dataset에서 사용하고 싶은 label. "age", "gender", "mask" 중 택1')
-    parser.add_argument('--saved_dir', type=str, default='./model', help='/opt/ml/workspace/baseline/model')
-    parser.add_argument('--saved_dir_model', type=str, default=None, help='학습시킨 모델을 다시 로드함. 해당 경로는 사용하고 싶은 모델의 .pth를 정확히 기술해야 함.')
-    parser.add_argument('--pre_trained_model', nargs='*', default=None, help='torchvision.model에 존재하는 model과 freeze 여부.')
+    parser.add_argument('--name', default='exp', help='model save at {SM_MODEL_DIR}/{name}')
+    parser.add_argument('--label', type=str, default='multi', help='label of the data (default: multi)')
+    parser.add_argument('--weight_version', type=int, default='0', help='implementation version of WegightedRandomSample (default: 0)')
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/train/images'))
-    # parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model/age'))
-    parser.add_argument('--model_dir', type=str, default=f"/opt/ml/workspace/saved")
-    
-    
-    args = parser.parse_args()
-    kwargs = {}
-    
-    if args.saved_dir:
-        kwargs['saved_dir'] = args.saved_dir
-    if args.label_type:
-        kwargs['label_type'] = args.label_type
-    if args.saved_dir_model:
-        kwargs['saved_dir_model'] = args.saved_dir_model
-    if args.pre_trained_model:
-        kwargs['model_using'] = args.pre_trained_model[0]
-        kwargs['freeze'] = args.pre_trained_model[1]
+    parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
 
+    args = parser.parse_args()
+    print(args)
 
     data_dir = args.data_dir
-    model_dir = args.model_dir
-    
+    model_dir = args.model_dir + '/' + args.label
+
     train(data_dir, model_dir, args)
-
-# %% [markdown]
-# wandb.config에 기록해야 할 것
-# 
-# > config
-# 
-# dataset.image_paths
-# dataset.mask_labels / dataset.image_paths
-# dataset.mean
-# dataset.std
-# dataset.num_classes
-# 
-# 
-# use_cuda
-# multiprocessing.cpu_count()
-# 
-# 
-# args.epochs
-# args.dataset
-# args.augmentation
-# args.resize
-# args.batch_size
-# args.valid_batch_size
-# args.model
-# args.optimizer
-# args.lr
-# args.val_ratio
-# args.criterion
-# args.lr_decay_step
-# args.name
-# args.label_type
-
-# %% [markdown]
-# 
-
-
