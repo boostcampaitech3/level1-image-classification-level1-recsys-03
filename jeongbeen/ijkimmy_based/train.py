@@ -289,7 +289,8 @@ def train(data_dir, model_dir, args):
         weight_decay=5e-4
     )
 
-    scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
+    # scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
+    scheduler = ExponentialLR(optimizer, gamma=0.95)
 
     
     # tensorboard의 SummaryWriter 인스턴스를 만들기 이전에 init해야 한다!
