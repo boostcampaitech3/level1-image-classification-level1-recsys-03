@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.optim.lr_scheduler import StepLR  # learning rate를 유동적으로 조절
+from torch.optim.lr_scheduler import StepLR, ExponentialLR  # learning rate를 유동적으로 조절
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter  # tensorboard 기반으로 logging
 import matplotlib.pyplot as plt
