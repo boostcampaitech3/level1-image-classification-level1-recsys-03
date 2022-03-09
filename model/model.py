@@ -155,6 +155,7 @@ class PretrainedModels(nn.Module):
             self.model.classifier = nn.Linear(num_ftrs, self.num_classes) 
             self.input_size = 224
         elif self.model_name == 'inception': #### NEED TO FIX ####
+            raise NotImplementedError('inception is not yet implemented')
             self.model = models.inception_v3(pretrained=True)
             self.set_param_requires_grad() 
             num_ftrs = self.model.AuxLogits.fc.in_features # 768, Handle the auxilary net
@@ -173,22 +174,6 @@ class PretrainedModels(nn.Module):
         if self.feature_extract:
             for param in self.model.parameters():
                 param.requires_grad = False
-
-
-# # separate models per task (label: mask, age, gender)
-# class ModelWrapper(nn.Module):
-#     def __init__(self, num_classes, model_mask, model_gender, model_age):
-#         super().__init__()
-#         self.model_mask = model_mask
-#         self.model_gender = model_gender
-#         self.model_age = model_age
-#         self.num_classes = num_classes
-
-#     def forward(self, x):
-#         label_mask = self.model_mask(x)
-#         label_gender = self.model_gender(x)
-#         label_age = self.model_age(x)
-#         return None
 
 
 # Custom Model Template

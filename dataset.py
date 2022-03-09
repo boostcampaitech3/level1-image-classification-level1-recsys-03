@@ -354,7 +354,7 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         sample_weight = [multi_weight[self.multi_labels[idx]] for idx in self.indices['train']]
         return WeightedRandomSampler(weights=sample_weight, num_samples=len(sample_weight), replacement=True)
 
-    def get_weighted_sampler(self, ver: int=0) -> WeightedRandomSampler:  
+    def get_weighted_sampler(self, ver: int=3) -> WeightedRandomSampler:  
         """
         returns WeightedRandomSampler based on the distribution of the train label
         used to prevent overfitting due to unbalanced dataset
