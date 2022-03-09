@@ -103,6 +103,8 @@ ijkimmy/
 │
 ├── dataset.py              # dataset class that inherits torch.utils.data.Dataset
 │
+├── ensemble.ipynb          # inference from trained model using hard & soft voting (ensemble)
+│
 ├── inference.py            # inference from trained model (make inference result to csv form)
 │
 ├── run.sh                  # script to run the project 
