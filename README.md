@@ -1,5 +1,4 @@
 # Boostcamp AI Tech3 Image Clasification Contest (Level 1)
----
 
 ## Contents
 - [프로젝트 개요](#-1.-프로젝트-개요)
