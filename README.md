@@ -1,11 +1,21 @@
 # Boostcamp AI Tech3 Image Clasification Contest (Level 1)
 
 ## Contents
-- [프로젝트 개요](#-프로젝트-개요)
-- [팀원 소개](#-프로젝트-팀-구성-및-역할)
-- [Ground Rule](#-Ground-Rule)
-- [프로젝트 구조](#-프로젝트-구조)
-- [Getting Started](#-Getting-Started)
+- [프로젝트 개요](#프로젝트-개요)
+   - [프로젝트 주제](#프로젝트-주제)
+   - [데이터셋 구성](#데이터셋-구성)
+   - [개발환경](#개발환경)
+- [팀원 소개](#프로젝트-팀-구성-및-역할)
+- [Ground Rule](#Ground-Rule)
+   - [Coding Convention](#Coding-Convention)
+   - [Organization](#Organization)
+- [프로젝트 구조](#프로젝트-구조)
+- [Getting Started](#Getting-Started)
+   - [Dependencies](#Dependencies)
+   - [Install Requirements](#Install-Requirements)
+   - [Run](#Run)
+   - [Report](#Report)
+   - [Acknowledgements](#Acknowledgements)
 
 # 프로젝트 개요
 
