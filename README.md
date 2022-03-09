@@ -1,13 +1,13 @@
 # Boostcamp AI Tech3 Image Clasification Contest (Level 1)
 
 ## Contents
-- [프로젝트 개요](#-1.-프로젝트-개요)
-- [팀원 소개](#-2.-프로젝트-팀-구성-및-역할)
-- [Ground Rule](#-3.-Ground-Rule)
-- [프로젝트 구조](#-4.-프로젝트-구조)
-- [Getting Started](#-5.-Getting-Started)
+- [프로젝트 개요](#-프로젝트-개요)
+- [팀원 소개](#-프로젝트-팀-구성-및-역할)
+- [Ground Rule](#-Ground-Rule)
+- [프로젝트 구조](#-프로젝트-구조)
+- [Getting Started](#-Getting-Started)
 
-# 1. 프로젝트 개요
+# 프로젝트 개요
 
 ## 프로젝트 주제
 
@@ -35,7 +35,7 @@
 - Tesla V100 32GB
 
 
-# 2. 프로젝트 팀 구성 및 역할
+# 프로젝트 팀 구성 및 역할
 
 - 박정훈 (iksadNorth)
     - confusion matrix 사용한 실험 결과 시각화 구현
@@ -51,7 +51,7 @@
     - Focal, Label smoothing, Arcface loss function 실험
     - Learning rate scheduler 실험 (StepLR, ExponentialLR)
 
-# 3. Ground Rule
+# Ground Rule
 
 ## Coding Convention
 
@@ -74,7 +74,7 @@
 - 실험 공유: tensorboard와 wandb를 활용
 
 
-# 4. 프로젝트 구조
+# 프로젝트 구조
 
 ```python
 ijkimmy/
@@ -101,7 +101,7 @@ ijkimmy/
 ```
 
 
-# 5. Getting Started    
+# Getting Started    
 ## Dependencies
 - torch==1.6.0
 - torchvision==0.7.0                                                              
@@ -111,6 +111,10 @@ ijkimmy/
 
 ## Run
 - Run the program by modifying the `run.sh` script. By default, it trains three separate ResNet18 models to classify age, gender, and mask using `train.py`, and then creates an output file using `inference.py`.
+
+## Report
+- 전반적인 프로젝트 타임라인과 시험내용을 요약해놨습니다. [프로젝트 타임라인](./project_reports/project_timeline.md)
+- 대회가 끝난 후 개인 회고를 정리해 놨습니다. [개인회고](./project_reports/afterthoughts.md)
 
 ## Acknowledgements
 This project is generated from the template [Pytorch-Template](https://github.com/victoresque/pytorch-template) by [Victor Huang](https://github.com/victoresque)
