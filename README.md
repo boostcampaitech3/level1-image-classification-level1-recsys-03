@@ -1,7 +1,16 @@
 ﻿# Boostcamp AI Tech3 Image Clasification Contest (Level 1)
----
 
-# 1. 프로젝트 개요
+## Contents
+- [프로젝트 개요](#프로젝트-개요)
+   - [프로젝트 주제](#프로젝트-주제)
+   - [데이터셋 구성](#데이터셋-구성)
+   - [개발환경](#개발환경)
+- [팀원 소개](#프로젝트-팀-구성-및-역할)
+- [Ground Rule](#Ground-Rule)
+   - [Coding Convention](#Coding-Convention)
+   - [Organization](#Organization)
+
+# 프로젝트 개요
 
 ## 프로젝트 주제
 
@@ -28,23 +37,28 @@
 - Ram 90GB
 - Tesla V100 32GB
 
-# 2. 프로젝트 팀 구성 및 역할
+# 프로젝트 팀 구성 및 역할
 
-- 박정훈 (iksadNorth)
+- 박정훈 
+    - [iksadNorth](./iksadNorth/)
     - confusion matrix 사용한 실험 결과 시각화 구현
     - 중복되는 Mask data undersampling 구현
-- 김인정 (ijkimmy)
+- 김인정 
+    - [ijkimmy](./ijkimmy/)
     - ImageNet 기학습 모델들과 VGGFace 성능 비교 (+ fine-tuning)
     - RandomWeightedSampler, WeightedCrossEntropyLoss, StratifiedKFold, Early Stopping, Ensemble (hard, soft voting) 구현
-- 진상우 (Jin)
+- 진상우 
+    - [Jin](./Jin/)
     - ViT 기반 모델 & optimizer (Adam, AdamW) 실험
-- 김진우 (jinu)
+- 김진우 
+    - [jinu](./jinu/)
     - wandb sweep 사용한 hyperparameter tuning 실험
-- 서정빈 (jeongbeen)
+- 서정빈
+    - [jeongbeen](./jeongbeen/)
     - Focal, Label smoothing, Arcface loss function 실험
     - Learning rate scheduler 실험 (StepLR, ExponentialLR)
 
-# 3. Ground Rule
+# Ground Rule
 
 ## Coding Convention
 
