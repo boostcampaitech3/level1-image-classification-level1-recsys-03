@@ -45,7 +45,7 @@
     - 중복되는 Mask data undersampling 구현
 - 김인정 
     - [ijkimmy](./ijkimmy/)
-    - ImageNet 기학습 모델들과 VGGFace 성능 비교 (+ fine-tuning)
+    - 모델 학습 및 성능 비교 (VGGFace, ImageNet 모델들)
     - RandomWeightedSampler, WeightedCrossEntropyLoss, StratifiedKFold, Early Stopping, Ensemble (hard, soft voting) 구현
 - 진상우 
     - [Jin](./Jin/)
